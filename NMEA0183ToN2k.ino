@@ -20,7 +20,7 @@
 //#define N2k_SPI_CS_PIN 53
 #define USE_MCP_CAN_CLOCK_SET 8
 
-
+#include <StandardCplusplus.h>
 #include <Arduino.h>
 #include <Time.h>
 #include <NMEA2000_CAN.h>  // This will automatically choose right CAN library and create suitable NMEA2000 object

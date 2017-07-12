@@ -115,7 +115,6 @@ void HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
       tN2kMsg N2kMsg;
       //What is PerpendicularCrossed?
       //Need to calc ETA time en date. Let's set it on 0.0 en 0.
-      //Need to change btw to magnetic      
       SetN2kXTE(N2kMsg,1,N2kxtem_Autonomous, false, xte);
       pNMEA2000->SendMsg(N2kMsg);
       double Mbtw = toMagnetic(btw,pBD->Variation);
