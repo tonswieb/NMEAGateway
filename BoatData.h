@@ -1,6 +1,10 @@
 #ifndef _BoatData_H_
 #define _BoatData_H_
 
+#include <list>
+#include <map>
+#include <string>
+
 typedef struct tBoatData {
   unsigned long DaysSince1970;   // Days since 1970-01-01
   
@@ -25,6 +29,14 @@ public:
     SatelliteCount=0; 
     DGPSReferenceStationID=0;
   };
+};
+
+typedef struct tNavData{
+  double magBearingOriginToDestination, trueBearingOriginToDestination, destLatitude, destLongitude, dtw, btw, vmg = 0;
+  std::string originID;
+  std::string destinationID;
+  std::list<std::string> wp;
+  std::map<std::string,tWPL> wpMap;
 };
 
 #endif // _BoatData_H_

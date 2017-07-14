@@ -37,6 +37,7 @@
 #define NMEA0183SourceGPS 1
 
 tBoatData BoatData;
+tNavData NavData;
 
 tNMEA0183Msg NMEA0183Msg;
 tNMEA0183 NMEA0183_3;
@@ -75,7 +76,8 @@ void setup() {
   NMEA2000.Open();
 
   // Setup NMEA0183 ports and handlers
-  InitNMEA0183Handlers(&NMEA2000, &BoatData);
+  InitNMEA0183Handlers(&NMEA2000, &BoatData, &NavData);
+  DebugNMEA0183Handlers(&Serial);
   NMEA0183_3.SetMsgHandler(HandleNMEA0183Msg);
 
   NMEA0183_3.Begin(&Serial3,NMEA0183SourceGPSCompass, 4800);

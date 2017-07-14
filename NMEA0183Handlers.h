@@ -22,7 +22,7 @@ Author: Timo Lappalainen
 #include <NMEA2000.h>
 #include "BoatData.h"
 
-void InitNMEA0183Handlers(tNMEA2000 *_NMEA2000, tBoatData *_BoatData);
+void InitNMEA0183Handlers(tNMEA2000 *_NMEA2000, tBoatData *_BoatData, tNavData *_NavData);
 void DebugNMEA0183Handlers(Stream* _stream);
 
 void HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg);
