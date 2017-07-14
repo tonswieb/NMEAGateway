@@ -31,11 +31,14 @@ public:
   };
 };
 
-typedef struct tNavData{
-  double magBearingOriginToDestination, trueBearingOriginToDestination, destLatitude, destLongitude, dtw, btw, vmg = 0;
-  std::string originID;
-  std::string destinationID;
+typedef struct tNavData {
+  //NMEA0183-RMB. Does not conatin enough information to send a NMEA200 message, but contains some elements required for a NMEA2000 message.
+  tRMB rmb;
+  //NMEA0183-BOD (Bearing Origin to Destination). Does not conatin enough information to send a NMEA200 message, but contains some elements required for a NMEA2000 message.
+  tBOD bod;
+  //List of RTE waypoints. Can have multiple RTE messages which are linked. So keep a external list which is cleaned upon the last RTE message.
   std::list<std::string> wp;
+  //Map of waypoints. Updated with each NMEA0183-WPL message and cleared with the last NMEA0183-RTE message.
   std::map<std::string,tWPL> wpMap;
 };
 
