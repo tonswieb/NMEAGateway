@@ -93,6 +93,21 @@ double toMagnetic(double True, double Variation) {
   return magnetic;    
 }
 
+/**
+ * With Garmin GPS 120 GOTO route we only get 1 waypoint. The destination.
+ * Perhaps this is the default for all NMEA0183 devices.
+ * For NMEA2000 the destination needs to be 2nd waypoint in the route. 
+ * So lets at the current location as the 1st waypoint in the route.
+ */
+void handleGarminGPS120GOTO() {
+    tWPL wpl;
+    wpl.name = "CURRENT";
+    wpl.latitude = pBD->Latitude;
+    wpl.longitude = pBD->Longitude;
+    pND->wpMap[wpl.name] = wpl;
+    pND->wp.insert(pND->wp.begin(),wpl.name);
+
+}
 
 void removeWaypointsUpToOriginCurrentLeg() {
 
@@ -223,6 +238,10 @@ void HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
   } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse RMC"); }
 }
 
+/**
+ * Receive NMEA0183 RMB message (Recommended Navigation Data for GPS) and store it for later use after all RTE messages are received.
+ * Contains enough information to send a NMEA2000 PGN129283 (XTE) message, all other information is stored for later use after all RTE messages are received.
+ */
 void HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
   if (pBD==0) return;
 
@@ -312,7 +331,10 @@ void HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
   } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse VTG"); }
 }
 
-//Cannot create NMEA2000 message from NMEA0183 BOD, need at 
+/**
+ * Receive NMEA0183 BOD message (Bearing Origin to Destination) and store it for later use after all RTE messages are received.
+ * Does not contain enough information itself to send a single NMEA2000 message.
+ */
 void HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (NMEA0183ParseBOD_nc(NMEA0183Msg,pND->bod)) {
@@ -325,31 +347,28 @@ void HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
   } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse BOD"); }
 }
 
+/**
+ * Handle receiving NMEA0183 RTE message (route).
+ * NMEA2000 messages are sent when last correlated RTE message is received. We also need previously send WPL, BOD and RMC messages.
+ * First send the route with all the waypoints, next the navigation information referring to the current leg in the list.
+ */
 void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
   tRTE rte;
   if (NMEA0183ParseRTE_nc(NMEA0183Msg,rte)) {
 
+    //Combine the waypoints of correlated RTE messages in a central ist.
+    //Will be processed when the last RTE message is recevied.
     for (char* currWp : rte.wp) {
       std::string wp = currWp;
       pND->wp.push_back(wp);
     }
 
     if (rte.currSentence == rte.nrOfsentences) {
-      //First send the route with all the waypoints, next the navigation information referring to the current leg in the list.
-      //We cannot send NavigationInfo standalone, because wp is cleared when RTE is received.
 
-      //Handle GOTO by inserting the current position as first waypoint.
       if (pND->wp.size() == 1) {
-        tWPL wpl;
-        wpl.name = "Current";
-        wpl.latitude = pBD->Latitude;
-        wpl.longitude = pBD->Longitude;
-        pND->wpMap[wpl.name] = wpl;
-        pND->wp.insert(pND->wp.begin(),wpl.name);
-      }
-
-      if (rte.type == 'c' && sendWPlistFromOriginCurrentLeg) {
+        handleGarminGPS120GOTO();
+      } else if (rte.type == 'c' && sendWPlistFromOriginCurrentLeg) {
         //No need to remove waypoints when rte.type == 'w'
         removeWaypointsUpToOriginCurrentLeg();
       }
@@ -372,7 +391,8 @@ void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 }
 
 /**
- * Addd waypoints to the map and override old ones.
+ * Receive NMEA0183 WPL message (Waypoint List) and store it for later use after all RTE messages are received.
+ * Does not contain enough information itself to send a single NMEA2000 message.
  */
 void HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   
