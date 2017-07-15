@@ -42,6 +42,8 @@ tNMEA2000 *pNMEA2000=0;
 tBoatData *pBD=0;
 tNavData *pND=0;
 Stream* NMEA0183HandlersDebugStream=0;
+//true = NMEA0183 BOD.type = 'w', false = NMEA0183 BOD.type = 'c'
+bool sendWPlistFromOriginCurrentLeg=true;
 
 tNMEA0183Handler NMEA0183Handlers[]={
   {"GGA",&HandleGGA},
@@ -91,50 +93,79 @@ double toMagnetic(double True, double Variation) {
   return magnetic;    
 }
 
+
+void removeWaypointsUpToOriginCurrentLeg() {
+
+    bool originFound=false;
+    std::list<std::string>::iterator it = pND->wp.begin();
+    for (; it!=pND->wp.end(); ++it) {
+      if (*it == pND->bod.originID) {
+        originFound=true;
+        break;
+      }
+    }
+    if (originFound) {
+      pND->wp.erase(pND->wp.begin(),it);
+    }
+}
+
+/**
+ * Send the active route with all waypoints from the origin of the current leg and onwards.
+ * So the waypoint that corresponds with the originID from the BOD message should be the 1st. The destinationID from the BOD message should be the 2nd. Etc.
+ */
 void sendPGN129285(const tRTE &rte) {
   
       tN2kMsg N2kMsg;
       int i=0;
       SetN2kPGN129285(N2kMsg,i, 1, rte.routeID, false, false, "Unknown");
+
       for (std::string currWp : pND->wp) {
         //Continue adding waypoints as long as they fit within a single message
         tWPL wpl = pND->wpMap[currWp];
-        if (NMEA0183HandlersDebugStream!=0) {
-          NMEA0183HandlersDebugStream->print("129285:");
-          NMEA0183HandlersDebugStream->print(wpl.name.c_str());NMEA0183HandlersDebugStream->print(",");
-          NMEA0183HandlersDebugStream->print(wpl.latitude);NMEA0183HandlersDebugStream->print(",");
-          NMEA0183HandlersDebugStream->print(wpl.longitude);NMEA0183HandlersDebugStream->print("\n");
-        }
-        
-        if (!AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude)) {
-          //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
-          pNMEA2000->SendMsg(N2kMsg); 
-          N2kMsg.Clear();
-          SetN2kPGN129285(N2kMsg,i, 1, rte.routeID, false, false, "Unknown");
-          //TODO: Check for the result of the Append, should not fail due to message size. Perhaps some other reason?
-          AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude);
+        if (wpl.name == currWp) {
+          if (NMEA0183HandlersDebugStream!=0) {
+            NMEA0183HandlersDebugStream->print("129285:");
+            NMEA0183HandlersDebugStream->print(wpl.name.c_str());NMEA0183HandlersDebugStream->print(",");
+            NMEA0183HandlersDebugStream->print(wpl.latitude);NMEA0183HandlersDebugStream->print(",");
+            NMEA0183HandlersDebugStream->print(wpl.longitude);NMEA0183HandlersDebugStream->print("\n");
+          }
+          if (!AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude)) {
+            //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
+            pNMEA2000->SendMsg(N2kMsg); 
+            N2kMsg.Clear();
+            SetN2kPGN129285(N2kMsg,i, 1, rte.routeID, false, false, "Unknown");
+            //TODO: Check for the result of the Append, should not fail due to message size. Perhaps some other reason?
+            AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude);
+          }
+        } else if (NMEA0183HandlersDebugStream!=0)  {
+            NMEA0183HandlersDebugStream->print("129285: Skipping ");
+            NMEA0183HandlersDebugStream->print(currWp.c_str());NMEA0183HandlersDebugStream->print("\n");
         }
         i++;
       }
       pNMEA2000->SendMsg(N2kMsg);       
 }
 
-void sendSetN2kNavigationInfo() {
+/*
+ * Send the navigation information of the current leg of the route.
+ * B&G Trition ignores OriginWaypointNumber and DestinationWaypointNumber values in this message.
+ * It always takes the 2nd waypoint from PGN129285 as DestinationWaypoint.
+ * Not sure if that is compliant with NMEA2000 or B&G Trition specific.
+ */
+void sendPGN129284() {
   
       tN2kMsg N2kMsg;
 
       int i=0;
       int originID=0;
-      int destinationID=0;
       for (std::string currWp : pND->wp) {
         if (currWp == pND->bod.originID) {
-          originID = i;          
-        }
-        if (currWp == pND->bod.destID) {
-          destinationID = i;
+          originID = i;
+          break;
         }
         i++;
       }
+      int destinationID=originID+1;
       
       //B&G Triton ignores etaTime and etaDays and calculates from the other info. So let's set them to 0 for now.
       double etaTime, etaDays = 0.0;
@@ -155,14 +186,14 @@ void sendSetN2kNavigationInfo() {
                           pND->rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
     if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("NAV: originID="); NMEA0183HandlersDebugStream->print(pND->bod.originID.c_str());NMEA0183HandlersDebugStream->print(",");NMEA0183HandlersDebugStream->println(originID);
-      NMEA0183HandlersDebugStream->print("RMC: destinationID="); NMEA0183HandlersDebugStream->print(pND->bod.destID.c_str());NMEA0183HandlersDebugStream->print(",");NMEA0183HandlersDebugStream->println(destinationID);
-      NMEA0183HandlersDebugStream->print("RMC: latitude="); NMEA0183HandlersDebugStream->println(pND->rmb.latitude,5);
-      NMEA0183HandlersDebugStream->print("RMC: longitude="); NMEA0183HandlersDebugStream->println(pND->rmb.longitude,5);
-      NMEA0183HandlersDebugStream->print("RMC: VMG="); NMEA0183HandlersDebugStream->println(pND->rmb.vmg);
-      NMEA0183HandlersDebugStream->print("RMC: DTW="); NMEA0183HandlersDebugStream->println(pND->rmb.dtw);
-      NMEA0183HandlersDebugStream->print("RMC: BTW (Current to Destination="); NMEA0183HandlersDebugStream->println(Mbtw);
-      NMEA0183HandlersDebugStream->print("RMC: BTW (Orign to Desitination)="); NMEA0183HandlersDebugStream->println(pND->bod.magBearing);
+      NMEA0183HandlersDebugStream->print("129284: originID="); NMEA0183HandlersDebugStream->print(pND->bod.originID.c_str());NMEA0183HandlersDebugStream->print(",");NMEA0183HandlersDebugStream->println(originID);
+      NMEA0183HandlersDebugStream->print("129284: destinationID="); NMEA0183HandlersDebugStream->print(pND->bod.destID.c_str());NMEA0183HandlersDebugStream->print(",");NMEA0183HandlersDebugStream->println(destinationID);
+      NMEA0183HandlersDebugStream->print("129284: latitude="); NMEA0183HandlersDebugStream->println(pND->rmb.latitude,5);
+      NMEA0183HandlersDebugStream->print("129284: longitude="); NMEA0183HandlersDebugStream->println(pND->rmb.longitude,5);
+      NMEA0183HandlersDebugStream->print("129284: VMG="); NMEA0183HandlersDebugStream->println(pND->rmb.vmg);
+      NMEA0183HandlersDebugStream->print("129284: DTW="); NMEA0183HandlersDebugStream->println(pND->rmb.dtw);
+      NMEA0183HandlersDebugStream->print("129284: BTW (Current to Destination="); NMEA0183HandlersDebugStream->println(Mbtw);
+      NMEA0183HandlersDebugStream->print("129284: BTW (Orign to Desitination)="); NMEA0183HandlersDebugStream->println(pND->bod.magBearing);
     }
 }
 
@@ -305,10 +336,25 @@ void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
     }
 
     if (rte.currSentence == rte.nrOfsentences) {
-      //First send the route with all the waypoints, next the navigation information referring to the waypoints in the list.
+      //First send the route with all the waypoints, next the navigation information referring to the current leg in the list.
       //We cannot send NavigationInfo standalone, because wp is cleared when RTE is received.
+
+      //Handle GOTO by inserting the current position as first waypoint.
+      if (pND->wp.size() == 1) {
+        tWPL wpl;
+        wpl.name = "Current";
+        wpl.latitude = pBD->Latitude;
+        wpl.longitude = pBD->Longitude;
+        pND->wpMap[wpl.name] = wpl;
+        pND->wp.insert(pND->wp.begin(),wpl.name);
+      }
+
+      if (rte.type == 'c' && sendWPlistFromOriginCurrentLeg) {
+        //No need to remove waypoints when rte.type == 'w'
+        removeWaypointsUpToOriginCurrentLeg();
+      }
       sendPGN129285(rte);
-      sendSetN2kNavigationInfo();
+      sendPGN129284();
       //Cleanup dynamic memory and be ready for the next set of WPL messages
       pND->wpMap.clear();
       pND->wp.clear();
