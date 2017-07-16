@@ -70,7 +70,7 @@ void setup() {
   // If you also want to see all traffic on the bus use N2km_ListenAndNode instead of N2km_NodeOnly below
   NMEA2000.SetMode(tNMEA2000::N2km_NodeOnly,25);
   //NMEA2000.SetDebugMode(tNMEA2000::dm_Actisense); // Uncomment this, so you can test code without CAN bus chips on Arduino Mega
-  //NMEA2000.EnableForward(false); // Disable all msg forwarding to USB (=Serial)
+  NMEA2000.EnableForward(false); // Disable all msg forwarding to USB (=Serial)
   // Here we tell library, which PGNs we transmit
   NMEA2000.ExtendTransmitMessages(TransmitMessages);
   NMEA2000.Open();
