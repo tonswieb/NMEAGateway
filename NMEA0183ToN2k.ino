@@ -43,7 +43,7 @@ tNMEA0183Msg NMEA0183Msg;
 tNMEA0183 NMEA0183_3;
 
 // List here messages your device will transmit.
-const unsigned long TransmitMessages[] PROGMEM={129283L,129284L,129285L,126992L,129026L,129029L,0};
+const unsigned long TransmitMessages[] PROGMEM={129283L,129284L,129285L,126992L,129025L,129026L,129029L,0};
 
 void setup() {
 

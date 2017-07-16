@@ -41,9 +41,7 @@ void HandleWPL(const tNMEA0183Msg &NMEA0183Msg);
 tNMEA2000 *pNMEA2000=0;
 tBoatData *pBD=0;
 tNavData *pND=0;
-Stream* NMEA0183HandlersDebugStream=0;
-//true = NMEA0183 BOD.type = 'w', false = NMEA0183 BOD.type = 'c'
-bool sendWPlistFromOriginCurrentLeg=true;
+Stream* debugStream=0;
 
 tNMEA0183Handler NMEA0183Handlers[]={
   {"GGA",&HandleGGA},
@@ -64,7 +62,7 @@ void InitNMEA0183Handlers(tNMEA2000 *_NMEA2000, tBoatData *_BoatData, tNavData *
 }
 
 void DebugNMEA0183Handlers(Stream* _stream) {
-  NMEA0183HandlersDebugStream=_stream;
+  debugStream=_stream;
 }
 
 tN2kGNSSmethod GNSMethofNMEA0183ToN2k(int Method) {
@@ -125,6 +123,10 @@ void removeWaypointsUpToOriginCurrentLeg() {
 }
 
 /**
+ * 129285 - Navigation - Route/WP information
+ * Category: Navigation
+ * This PGN shall return Route and WP data ahead in the Active Route. It can be requested or may be transmitted without a request, typically at each Waypoint advance. 
+ * 
  * Send the active route with all waypoints from the origin of the current leg and onwards.
  * So the waypoint that corresponds with the originID from the BOD message should be the 1st. The destinationID from the BOD message should be the 2nd. Etc.
  */
@@ -138,11 +140,11 @@ void sendPGN129285(const tRTE &rte) {
         //Continue adding waypoints as long as they fit within a single message
         tWPL wpl = pND->wpMap[currWp];
         if (wpl.name == currWp) {
-          if (NMEA0183HandlersDebugStream!=0) {
-            NMEA0183HandlersDebugStream->print("129285:");
-            NMEA0183HandlersDebugStream->print(wpl.name.c_str());NMEA0183HandlersDebugStream->print(",");
-            NMEA0183HandlersDebugStream->print(wpl.latitude);NMEA0183HandlersDebugStream->print(",");
-            NMEA0183HandlersDebugStream->print(wpl.longitude);NMEA0183HandlersDebugStream->print("\n");
+          if (debugStream!=0) {
+            debugStream->print("129285:");
+            debugStream->print(wpl.name.c_str());debugStream->print(",");
+            debugStream->print(wpl.latitude);debugStream->print(",");
+            debugStream->print(wpl.longitude);debugStream->print("\n");
           }
           if (!AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude)) {
             //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
@@ -152,9 +154,9 @@ void sendPGN129285(const tRTE &rte) {
             //TODO: Check for the result of the Append, should not fail due to message size. Perhaps some other reason?
             AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude);
           }
-        } else if (NMEA0183HandlersDebugStream!=0)  {
-            NMEA0183HandlersDebugStream->print("129285: Skipping ");
-            NMEA0183HandlersDebugStream->print(currWp.c_str());NMEA0183HandlersDebugStream->print("\n");
+        } else if (debugStream!=0)  {
+            debugStream->print("129285: Skipping ");
+            debugStream->print(currWp.c_str());debugStream->print("\n");
         }
         i++;
       }
@@ -162,6 +164,10 @@ void sendPGN129285(const tRTE &rte) {
 }
 
 /*
+ * 129284 - Navigation Data
+ * Category: Navigation
+ * This PGN provides essential navigation data for following a route.Transmissions will originate from products that can create and manage routes using waypoints. This information is intended for navigational repeaters. 
+ * 
  * Send the navigation information of the current leg of the route.
  * B&G Trition ignores OriginWaypointNumber and DestinationWaypointNumber values in this message.
  * It always takes the 2nd waypoint from PGN129285 as DestinationWaypoint.
@@ -193,16 +199,16 @@ void sendPGN129284() {
       SetN2kNavigationInfo(N2kMsg,1,pND->rmb.dtw,N2khr_magnetic,PerpendicularCrossed,ArrivalCircleEntered,N2kdct_RhumbLine,etaTime,etaDays,
                           pND->bod.magBearing,Mbtw,originID,destinationID,pND->rmb.latitude,pND->rmb.longitude,pND->rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("129284: originID="); NMEA0183HandlersDebugStream->print(pND->bod.originID.c_str());NMEA0183HandlersDebugStream->print(",");NMEA0183HandlersDebugStream->println(originID);
-      NMEA0183HandlersDebugStream->print("129284: destinationID="); NMEA0183HandlersDebugStream->print(pND->bod.destID.c_str());NMEA0183HandlersDebugStream->print(",");NMEA0183HandlersDebugStream->println(destinationID);
-      NMEA0183HandlersDebugStream->print("129284: latitude="); NMEA0183HandlersDebugStream->println(pND->rmb.latitude,5);
-      NMEA0183HandlersDebugStream->print("129284: longitude="); NMEA0183HandlersDebugStream->println(pND->rmb.longitude,5);
-      NMEA0183HandlersDebugStream->print("129284: ArrivalCircleEntered="); NMEA0183HandlersDebugStream->println(ArrivalCircleEntered);
-      NMEA0183HandlersDebugStream->print("129284: VMG="); NMEA0183HandlersDebugStream->println(pND->rmb.vmg);
-      NMEA0183HandlersDebugStream->print("129284: DTW="); NMEA0183HandlersDebugStream->println(pND->rmb.dtw);
-      NMEA0183HandlersDebugStream->print("129284: BTW (Current to Destination="); NMEA0183HandlersDebugStream->println(Mbtw);
-      NMEA0183HandlersDebugStream->print("129284: BTW (Orign to Desitination)="); NMEA0183HandlersDebugStream->println(pND->bod.magBearing);
+    if (debugStream!=0) {
+      debugStream->print("129284: originID="); debugStream->print(pND->bod.originID.c_str());debugStream->print(",");debugStream->println(originID);
+      debugStream->print("129284: destinationID="); debugStream->print(pND->bod.destID.c_str());debugStream->print(",");debugStream->println(destinationID);
+      debugStream->print("129284: latitude="); debugStream->println(pND->rmb.latitude,5);
+      debugStream->print("129284: longitude="); debugStream->println(pND->rmb.longitude,5);
+      debugStream->print("129284: ArrivalCircleEntered="); debugStream->println(ArrivalCircleEntered);
+      debugStream->print("129284: VMG="); debugStream->println(pND->rmb.vmg);
+      debugStream->print("129284: DTW="); debugStream->println(pND->rmb.dtw);
+      debugStream->print("129284: BTW (Current to Destination="); debugStream->println(Mbtw);
+      debugStream->print("129284: BTW (Orign to Desitination)="); debugStream->println(pND->bod.magBearing);
     }
 }
 
@@ -215,21 +221,23 @@ void HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
     if (pNMEA2000!=0) {
       tN2kMsg N2kMsg;
       double MCOG = toMagnetic(pBD->COG,pBD->Variation);
+      //PGN129026
       SetN2kCOGSOGRapid(N2kMsg,1,N2khr_magnetic,MCOG,pBD->SOG); 
       pNMEA2000->SendMsg(N2kMsg);
+      //PGN129025
       SetN2kLatLonRapid(N2kMsg,pBD->Latitude,pBD->Longitude);
       pNMEA2000->SendMsg(N2kMsg);
     }
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("RMC: GPSTime="); NMEA0183HandlersDebugStream->println(pBD->GPSTime);
-      NMEA0183HandlersDebugStream->print("RMC: Latitude="); NMEA0183HandlersDebugStream->println(pBD->Latitude,5);
-      NMEA0183HandlersDebugStream->print("RMC: Longitude="); NMEA0183HandlersDebugStream->println(pBD->Longitude,5);
-      NMEA0183HandlersDebugStream->print("RMC: COG="); NMEA0183HandlersDebugStream->println(pBD->COG);
-      NMEA0183HandlersDebugStream->print("RMC: SOG="); NMEA0183HandlersDebugStream->println(pBD->SOG);
-      NMEA0183HandlersDebugStream->print("RMC: DaysSince1970="); NMEA0183HandlersDebugStream->println(pBD->DaysSince1970);
-      NMEA0183HandlersDebugStream->print("RMC: Variation="); NMEA0183HandlersDebugStream->println(pBD->Variation);
+    if (debugStream!=0) {
+      debugStream->print("RMC: GPSTime="); debugStream->println(pBD->GPSTime);
+      debugStream->print("RMC: Latitude="); debugStream->println(pBD->Latitude,5);
+      debugStream->print("RMC: Longitude="); debugStream->println(pBD->Longitude,5);
+      debugStream->print("RMC: COG="); debugStream->println(pBD->COG);
+      debugStream->print("RMC: SOG="); debugStream->println(pBD->SOG);
+      debugStream->print("RMC: DaysSince1970="); debugStream->println(pBD->DaysSince1970);
+      debugStream->print("RMC: Variation="); debugStream->println(pBD->Variation);
     }
-  } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse RMC"); }
+  } else if (debugStream!=0) { debugStream->println("Failed to parse RMC"); }
 }
 
 /**
@@ -245,17 +253,17 @@ void HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
       SetN2kXTE(N2kMsg,1,N2kxtem_Autonomous, false, pND->rmb.xte);
       pNMEA2000->SendMsg(N2kMsg);
     }
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("RMB: XTE="); NMEA0183HandlersDebugStream->println(pND->rmb.xte);
-      NMEA0183HandlersDebugStream->print("RMB: DTW="); NMEA0183HandlersDebugStream->println(pND->rmb.dtw);
-      NMEA0183HandlersDebugStream->print("RMB: BTW="); NMEA0183HandlersDebugStream->println(pND->rmb.btw);
-      NMEA0183HandlersDebugStream->print("RMB: VMG="); NMEA0183HandlersDebugStream->println(pND->rmb.vmg);
-      NMEA0183HandlersDebugStream->print("RMB: OriginID="); NMEA0183HandlersDebugStream->println(pND->rmb.originID.c_str());
-      NMEA0183HandlersDebugStream->print("RMB: DestinationID="); NMEA0183HandlersDebugStream->println(pND->rmb.destID.c_str());
-      NMEA0183HandlersDebugStream->print("RMB: Latittude="); NMEA0183HandlersDebugStream->println(pND->rmb.latitude,5);
-      NMEA0183HandlersDebugStream->print("RMB: Longitude="); NMEA0183HandlersDebugStream->println(pND->rmb.longitude,5);
+    if (debugStream!=0) {
+      debugStream->print("RMB: XTE="); debugStream->println(pND->rmb.xte);
+      debugStream->print("RMB: DTW="); debugStream->println(pND->rmb.dtw);
+      debugStream->print("RMB: BTW="); debugStream->println(pND->rmb.btw);
+      debugStream->print("RMB: VMG="); debugStream->println(pND->rmb.vmg);
+      debugStream->print("RMB: OriginID="); debugStream->println(pND->rmb.originID.c_str());
+      debugStream->print("RMB: DestinationID="); debugStream->println(pND->rmb.destID.c_str());
+      debugStream->print("RMB: Latittude="); debugStream->println(pND->rmb.latitude,5);
+      debugStream->print("RMB: Longitude="); debugStream->println(pND->rmb.longitude,5);
     }
-  } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse RMB"); }
+  } else if (debugStream!=0) { debugStream->println("Failed to parse RMB"); }
 }
 
 void HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
@@ -266,6 +274,7 @@ void HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
                    pBD->DGPSAge,pBD->DGPSReferenceStationID)) {
     if (pNMEA2000!=0) {
       tN2kMsg N2kMsg;
+      //129029
       SetN2kGNSS(N2kMsg,1,pBD->DaysSince1970,pBD->GPSTime,pBD->Latitude,pBD->Longitude,pBD->Altitude,
                 N2kGNSSt_GPS,GNSMethofNMEA0183ToN2k(pBD->GPSQualityIndicator),pBD->SatelliteCount,pBD->HDOP,0,
                 pBD->GeoidalSeparation,1,N2kGNSSt_GPS,pBD->DGPSReferenceStationID,pBD->DGPSAge
@@ -273,19 +282,19 @@ void HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
       pNMEA2000->SendMsg(N2kMsg); 
     }
 
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("GGA: Time="); NMEA0183HandlersDebugStream->println(pBD->GPSTime);
-      NMEA0183HandlersDebugStream->print("GGA: Latitude="); NMEA0183HandlersDebugStream->println(pBD->Latitude,5);
-      NMEA0183HandlersDebugStream->print("GGA: Longitude="); NMEA0183HandlersDebugStream->println(pBD->Longitude,5);
-      NMEA0183HandlersDebugStream->print("GGA: Altitude="); NMEA0183HandlersDebugStream->println(pBD->Altitude,1);
-      NMEA0183HandlersDebugStream->print("GGA: GPSQualityIndicator="); NMEA0183HandlersDebugStream->println(pBD->GPSQualityIndicator);
-      NMEA0183HandlersDebugStream->print("GGA: SatelliteCount="); NMEA0183HandlersDebugStream->println(pBD->SatelliteCount);
-      NMEA0183HandlersDebugStream->print("GGA: HDOP="); NMEA0183HandlersDebugStream->println(pBD->HDOP);
-      NMEA0183HandlersDebugStream->print("GGA: GeoidalSeparation="); NMEA0183HandlersDebugStream->println(pBD->GeoidalSeparation);
-      NMEA0183HandlersDebugStream->print("GGA: DGPSAge="); NMEA0183HandlersDebugStream->println(pBD->DGPSAge);
-      NMEA0183HandlersDebugStream->print("GGA: DGPSReferenceStationID="); NMEA0183HandlersDebugStream->println(pBD->DGPSReferenceStationID);
+    if (debugStream!=0) {
+      debugStream->print("GGA: Time="); debugStream->println(pBD->GPSTime);
+      debugStream->print("GGA: Latitude="); debugStream->println(pBD->Latitude,5);
+      debugStream->print("GGA: Longitude="); debugStream->println(pBD->Longitude,5);
+      debugStream->print("GGA: Altitude="); debugStream->println(pBD->Altitude,1);
+      debugStream->print("GGA: GPSQualityIndicator="); debugStream->println(pBD->GPSQualityIndicator);
+      debugStream->print("GGA: SatelliteCount="); debugStream->println(pBD->SatelliteCount);
+      debugStream->print("GGA: HDOP="); debugStream->println(pBD->HDOP);
+      debugStream->print("GGA: GeoidalSeparation="); debugStream->println(pBD->GeoidalSeparation);
+      debugStream->print("GGA: DGPSAge="); debugStream->println(pBD->DGPSAge);
+      debugStream->print("GGA: DGPSReferenceStationID="); debugStream->println(pBD->DGPSReferenceStationID);
     }
-  } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse GGA"); }
+  } else if (debugStream!=0) { debugStream->println("Failed to parse GGA"); }
 }
 
 void HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
@@ -300,10 +309,10 @@ void HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
 //      SetN2kTrueHeading(N2kMsg,1,pBD->TrueHeading);
       pNMEA2000->SendMsg(N2kMsg);
     }
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("True heading="); NMEA0183HandlersDebugStream->println(pBD->TrueHeading);
+    if (debugStream!=0) {
+      debugStream->print("True heading="); debugStream->println(pBD->TrueHeading);
     }
-  } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse HDT"); }
+  } else if (debugStream!=0) { debugStream->println("Failed to parse HDT"); }
 }
 
 void HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
@@ -319,10 +328,10 @@ void HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
       //SetN2kBoatSpeed(N2kMsg,1,SOG);
       //NMEA2000.SendMsg(N2kMsg);
     }
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("True heading="); NMEA0183HandlersDebugStream->println(pBD->TrueHeading);
+    if (debugStream!=0) {
+      debugStream->print("True heading="); debugStream->println(pBD->TrueHeading);
     }
-  } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse VTG"); }
+  } else if (debugStream!=0) { debugStream->println("Failed to parse VTG"); }
 }
 
 /**
@@ -332,13 +341,13 @@ void HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
 void HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (NMEA0183ParseBOD_nc(NMEA0183Msg,pND->bod)) {
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("BOD: True heading="); NMEA0183HandlersDebugStream->println(pND->bod.trueBearing);
-      NMEA0183HandlersDebugStream->print("BOD: Magnetic heading="); NMEA0183HandlersDebugStream->println(pND->bod.magBearing);
-      NMEA0183HandlersDebugStream->print("BOD: Origin ID="); NMEA0183HandlersDebugStream->println(pND->bod.originID.c_str());
-      NMEA0183HandlersDebugStream->print("BOD: Dest ID="); NMEA0183HandlersDebugStream->println(pND->bod.destID.c_str());
+    if (debugStream!=0) {
+      debugStream->print("BOD: True heading="); debugStream->println(pND->bod.trueBearing);
+      debugStream->print("BOD: Magnetic heading="); debugStream->println(pND->bod.magBearing);
+      debugStream->print("BOD: Origin ID="); debugStream->println(pND->bod.originID.c_str());
+      debugStream->print("BOD: Dest ID="); debugStream->println(pND->bod.destID.c_str());
     }
-  } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse BOD"); }
+  } else if (debugStream!=0) { debugStream->println("Failed to parse BOD"); }
 }
 
 /**
@@ -362,7 +371,7 @@ void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
       if (pND->wp.size() == 1) {
         handleGarminGPS120GOTO();
-      } else if (rte.type == 'c' && sendWPlistFromOriginCurrentLeg) {
+      } else if (rte.type == 'c') {
         //No need to remove waypoints when rte.type == 'w'
         removeWaypointsUpToOriginCurrentLeg();
       }
@@ -373,15 +382,15 @@ void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
       pND->wp.clear();
     }
 
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("RTE: Nr of sentences="); NMEA0183HandlersDebugStream->println(rte.nrOfsentences);
-      NMEA0183HandlersDebugStream->print("RTE: Current sentence="); NMEA0183HandlersDebugStream->println(rte.currSentence);
-      NMEA0183HandlersDebugStream->print("RTE: Type="); NMEA0183HandlersDebugStream->println(rte.type);
-      NMEA0183HandlersDebugStream->print("RTE: Route ID="); NMEA0183HandlersDebugStream->println(rte.routeID);
+    if (debugStream!=0) {
+      debugStream->print("RTE: Nr of sentences="); debugStream->println(rte.nrOfsentences);
+      debugStream->print("RTE: Current sentence="); debugStream->println(rte.currSentence);
+      debugStream->print("RTE: Type="); debugStream->println(rte.type);
+      debugStream->print("RTE: Route ID="); debugStream->println(rte.routeID);
       Serial.print("freeMemory()=");
       Serial.println(freeMemory());
     }
-  } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse RTE"); }
+  } else if (debugStream!=0) { debugStream->println("Failed to parse RTE"); }
 }
 
 /**
@@ -393,12 +402,12 @@ void HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   tWPL wpl;
   if (NMEA0183ParseWPL_nc(NMEA0183Msg,wpl)) {
     pND->wpMap[wpl.name] = wpl;
-    if (NMEA0183HandlersDebugStream!=0) {
-      NMEA0183HandlersDebugStream->print("WPL: Name="); NMEA0183HandlersDebugStream->println(pND->wpMap[wpl.name].name.c_str());
-      NMEA0183HandlersDebugStream->print("WPL: Latitude="); NMEA0183HandlersDebugStream->println(pND->wpMap[wpl.name].latitude);
-      NMEA0183HandlersDebugStream->print("WPL: Longitude="); NMEA0183HandlersDebugStream->println(pND->wpMap[wpl.name].longitude);
+    if (debugStream!=0) {
+      debugStream->print("WPL: Name="); debugStream->println(pND->wpMap[wpl.name].name.c_str());
+      debugStream->print("WPL: Latitude="); debugStream->println(pND->wpMap[wpl.name].latitude);
+      debugStream->print("WPL: Longitude="); debugStream->println(pND->wpMap[wpl.name].longitude);
       Serial.print("freeMemory()=");
       Serial.println(freeMemory());
     }
-  } else if (NMEA0183HandlersDebugStream!=0) { NMEA0183HandlersDebugStream->println("Failed to parse WPL"); }
+  } else if (debugStream!=0) { debugStream->println("Failed to parse WPL"); }
 }
