@@ -182,29 +182,23 @@ void sendPGN129284() {
       }
       int destinationID=originID+1;
       
-      //B&G Triton ignores etaTime and etaDays and calculates from the other info. So let's set them to 0 for now.
+      //B&G Triton ignores the etaTime and etaDays values. So let's leave them to 0 for now.
       double etaTime, etaDays = 0.0;
       double Mbtw = toMagnetic(pND->rmb.btw,pBD->Variation);
+      bool ArrivalCircleEntered = pND->rmb.arrivalAlarm == 'A';
+      //PerpendicularCrossed not calculated yet.
+      //Need to calculate it based on current lat/long, pND->bod.magBearing and pND->rmb.lat/long
+      bool PerpendicularCrossed = false;
       //What is PerpendicularCrossed?
-      SetN2kNavigationInfo(N2kMsg,1,
-                          pND->rmb.dtw,
-                          N2khr_magnetic,false,false,
-                          N2kdct_RhumbLine,
-                          etaTime,
-                          etaDays,
-                          pND->bod.magBearing,
-                          Mbtw,
-                          originID,
-                          destinationID,
-                          pND->rmb.latitude,
-                          pND->rmb.longitude,
-                          pND->rmb.vmg);
+      SetN2kNavigationInfo(N2kMsg,1,pND->rmb.dtw,N2khr_magnetic,PerpendicularCrossed,ArrivalCircleEntered,N2kdct_RhumbLine,etaTime,etaDays,
+                          pND->bod.magBearing,Mbtw,originID,destinationID,pND->rmb.latitude,pND->rmb.longitude,pND->rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
     if (NMEA0183HandlersDebugStream!=0) {
       NMEA0183HandlersDebugStream->print("129284: originID="); NMEA0183HandlersDebugStream->print(pND->bod.originID.c_str());NMEA0183HandlersDebugStream->print(",");NMEA0183HandlersDebugStream->println(originID);
       NMEA0183HandlersDebugStream->print("129284: destinationID="); NMEA0183HandlersDebugStream->print(pND->bod.destID.c_str());NMEA0183HandlersDebugStream->print(",");NMEA0183HandlersDebugStream->println(destinationID);
       NMEA0183HandlersDebugStream->print("129284: latitude="); NMEA0183HandlersDebugStream->println(pND->rmb.latitude,5);
       NMEA0183HandlersDebugStream->print("129284: longitude="); NMEA0183HandlersDebugStream->println(pND->rmb.longitude,5);
+      NMEA0183HandlersDebugStream->print("129284: ArrivalCircleEntered="); NMEA0183HandlersDebugStream->println(ArrivalCircleEntered);
       NMEA0183HandlersDebugStream->print("129284: VMG="); NMEA0183HandlersDebugStream->println(pND->rmb.vmg);
       NMEA0183HandlersDebugStream->print("129284: DTW="); NMEA0183HandlersDebugStream->println(pND->rmb.dtw);
       NMEA0183HandlersDebugStream->print("129284: BTW (Current to Destination="); NMEA0183HandlersDebugStream->println(Mbtw);
