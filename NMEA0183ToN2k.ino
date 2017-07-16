@@ -52,8 +52,8 @@ void setup() {
   NMEA2000.SetProductInformation("00000008", // Manufacturer's Model serial code
                                  107, // Manufacturer's product code
                                  "NMEA0183 -> N2k -> PC",  // Manufacturer's Model ID
-                                 "1.0.0.1 (2015-11-18)",  // Manufacturer's Software version code
-                                 "1.0.0.0 (2015-11-18)" // Manufacturer's Model version
+                                 "1.0.0.0 (2017-07-16)",  // Manufacturer's Software version code
+                                 "1.0.0.0 (2017-07-16)" // Manufacturer's Model version
                                  );
   // Det device information
   NMEA2000.SetDeviceInformation(8, // Unique number. Use e.g. Serial number.
@@ -77,7 +77,7 @@ void setup() {
 
   // Setup NMEA0183 ports and handlers
   InitNMEA0183Handlers(&NMEA2000, &BoatData, &NavData);
-  DebugNMEA0183Handlers(&Serial);
+  //DebugNMEA0183Handlers(&Serial);
   NMEA0183_3.SetMsgHandler(HandleNMEA0183Msg);
 
   NMEA0183_3.Begin(&Serial3,NMEA0183SourceGPSCompass, 4800);
