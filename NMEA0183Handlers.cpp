@@ -131,6 +131,13 @@ void removeWaypointsUpToOriginCurrentLeg() {
  * So the waypoint that corresponds with the originID from the BOD message should be the 1st. The destinationID from the BOD message should be the 2nd. Etc.
  */
 void sendPGN129285(const tRTE &rte) {
+
+      if (pND->wp.size() == 1) {
+        handleGarminGPS120GOTO();
+      } else if (rte.type == 'c') {
+        //No need to remove waypoints when rte.type == 'w'
+        removeWaypointsUpToOriginCurrentLeg();
+      }
   
       tN2kMsg N2kMsg;
       int i=0;
@@ -169,6 +176,7 @@ void sendPGN129285(const tRTE &rte) {
  * This PGN provides essential navigation data for following a route.Transmissions will originate from products that can create and manage routes using waypoints. This information is intended for navigational repeaters. 
  * 
  * Send the navigation information of the current leg of the route.
+ * With long routes from NMEA0183 GPS systems it can take a while before a PGN129285 can be sent. So the display value of originID or destinationID might not always be available.
  * B&G Trition ignores OriginWaypointNumber and DestinationWaypointNumber values in this message.
  * It always takes the 2nd waypoint from PGN129285 as DestinationWaypoint.
  * Not sure if that is compliant with NMEA2000 or B&G Trition specific.
@@ -177,25 +185,20 @@ void sendPGN129284() {
   
       tN2kMsg N2kMsg;
 
-      int i=0;
+      /*
+       * PGN129285 only gives route/wp data ahead in the Active Route. So originID will always be 0 and destinationID will always be 1.
+       * Unclear why these ID's need to be set in PGN129284. On B&G Triton displays other values are ignored anyway.
+       */
       int originID=0;
-      for (std::string currWp : pND->wp) {
-        if (currWp == pND->bod.originID) {
-          originID = i;
-          break;
-        }
-        i++;
-      }
       int destinationID=originID+1;
       
-      //B&G Triton ignores the etaTime and etaDays values. So let's leave them to 0 for now.
+      //B&G Triton ignores the etaTime and etaDays values and does the calculation by itself. So let's leave them at 0 for now.
       double etaTime, etaDays = 0.0;
       double Mbtw = toMagnetic(pND->rmb.btw,pBD->Variation);
       bool ArrivalCircleEntered = pND->rmb.arrivalAlarm == 'A';
       //PerpendicularCrossed not calculated yet.
       //Need to calculate it based on current lat/long, pND->bod.magBearing and pND->rmb.lat/long
       bool PerpendicularCrossed = false;
-      //What is PerpendicularCrossed?
       SetN2kNavigationInfo(N2kMsg,1,pND->rmb.dtw,N2khr_magnetic,PerpendicularCrossed,ArrivalCircleEntered,N2kdct_RhumbLine,etaTime,etaDays,
                           pND->bod.magBearing,Mbtw,originID,destinationID,pND->rmb.latitude,pND->rmb.longitude,pND->rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
@@ -210,6 +213,18 @@ void sendPGN129284() {
       debugStream->print("129284: BTW (Current to Destination="); debugStream->println(Mbtw);
       debugStream->print("129284: BTW (Orign to Desitination)="); debugStream->println(pND->bod.magBearing);
     }
+}
+
+/**
+ * 129283 - Cross Track Error
+ * Category: Navigation
+ * This PGN provides the magnitude of position error perpendicular to the desired course.
+ */
+void sendPGN129283() {
+
+  tN2kMsg N2kMsg;
+  SetN2kXTE(N2kMsg,1,N2kxtem_Autonomous, false, pND->rmb.xte);
+  pNMEA2000->SendMsg(N2kMsg);
 }
 
 // NMEA0183 message Handler functions
@@ -241,17 +256,16 @@ void HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
 }
 
 /**
- * Receive NMEA0183 RMB message (Recommended Navigation Data for GPS) and store it for later use after all RTE messages are received.
- * Contains enough information to send a NMEA2000 PGN129283 (XTE) message, all other information is stored for later use after all RTE messages are received.
+ * Receive NMEA0183 RMB message (Recommended Navigation Data for GPS).
+ * Contains enough information to send a NMEA2000 PGN129283 (XTE) message and NMEA2000 PGN129284 message.
  */
 void HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
   if (pBD==0) return;
 
   if (NMEA0183ParseRMB_nc(NMEA0183Msg, pND->rmb)) {    
     if (pNMEA2000!=0) {
-      tN2kMsg N2kMsg;
-      SetN2kXTE(N2kMsg,1,N2kxtem_Autonomous, false, pND->rmb.xte);
-      pNMEA2000->SendMsg(N2kMsg);
+      sendPGN129283();
+      sendPGN129284();
     }
     if (debugStream!=0) {
       debugStream->print("RMB: XTE="); debugStream->println(pND->rmb.xte);
@@ -335,7 +349,7 @@ void HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
 }
 
 /**
- * Receive NMEA0183 BOD message (Bearing Origin to Destination) and store it for later use after all RTE messages are received.
+ * Receive NMEA0183 BOD message (Bearing Origin to Destination) and store it for later use when the RMB message is received.
  * Does not contain enough information itself to send a single NMEA2000 message.
  */
 void HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
@@ -352,8 +366,9 @@ void HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
 /**
  * Handle receiving NMEA0183 RTE message (route).
- * NMEA2000 messages are sent when last correlated RTE message is received. We also need previously send WPL, BOD and RMC messages.
- * First send the route with all the waypoints, next the navigation information referring to the current leg in the list.
+ * NMEA2000 messages are sent when last correlated RTE message is received. We also need previously send WPL, messages.
+ * A single WPL message is sent per NMEA0183 message cycle (RMC, RMB, GGA, WPL) followed by the RTE message(s) in the next cycle.
+ * So it can take a while for long routes before alle waypoints are received.
  */
 void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
@@ -368,21 +383,14 @@ void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
     }
 
     if (rte.currSentence == rte.nrOfsentences) {
-
-      if (pND->wp.size() == 1) {
-        handleGarminGPS120GOTO();
-      } else if (rte.type == 'c') {
-        //No need to remove waypoints when rte.type == 'w'
-        removeWaypointsUpToOriginCurrentLeg();
-      }
       sendPGN129285(rte);
-      sendPGN129284();
       //Cleanup dynamic memory and be ready for the next set of WPL messages
-      pND->wpMap.clear();
       pND->wp.clear();
+      pND->wpMap.clear();
     }
 
     if (debugStream!=0) {
+      debugStream->print("RTE: Time="); debugStream->println(millis());
       debugStream->print("RTE: Nr of sentences="); debugStream->println(rte.nrOfsentences);
       debugStream->print("RTE: Current sentence="); debugStream->println(rte.currSentence);
       debugStream->print("RTE: Type="); debugStream->println(rte.type);
@@ -395,6 +403,8 @@ void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
 /**
  * Receive NMEA0183 WPL message (Waypoint List) and store it for later use after all RTE messages are received.
+ * A single WPL message is sent per NMEA0183 message cycle (RMC, RMB, GGA, WPL) so it can take a while for long routes 
+ * before alle waypoints are received.
  * Does not contain enough information itself to send a single NMEA2000 message.
  */
 void HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
@@ -403,6 +413,7 @@ void HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   if (NMEA0183ParseWPL_nc(NMEA0183Msg,wpl)) {
     pND->wpMap[wpl.name] = wpl;
     if (debugStream!=0) {
+      debugStream->print("WPL: Time="); debugStream->println(millis());
       debugStream->print("WPL: Name="); debugStream->println(pND->wpMap[wpl.name].name.c_str());
       debugStream->print("WPL: Latitude="); debugStream->println(pND->wpMap[wpl.name].latitude);
       debugStream->print("WPL: Longitude="); debugStream->println(pND->wpMap[wpl.name].longitude);
