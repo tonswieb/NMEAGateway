@@ -102,23 +102,23 @@ void handleGarminGPS120GOTO() {
     wpl.name = "CURRENT";
     wpl.latitude = pBD->Latitude;
     wpl.longitude = pBD->Longitude;
-    pND->wpMap[wpl.name] = wpl;
-    pND->wp.insert(pND->wp.begin(),wpl.name);
+    pND->wpMapInProgress[wpl.name] = wpl;
+    pND->wpListInProgress.insert(pND->wpListInProgress.begin(),wpl.name);
 
 }
 
 void removeWaypointsUpToOriginCurrentLeg() {
 
     bool originFound=false;
-    std::list<std::string>::iterator it = pND->wp.begin();
-    for (; it!=pND->wp.end(); ++it) {
+    std::list<std::string>::iterator it = pND->wpListInProgress.begin();
+    for (; it!=pND->wpListInProgress.end(); ++it) {
       if (*it == pND->bod.originID) {
         originFound=true;
         break;
       }
     }
     if (originFound) {
-      pND->wp.erase(pND->wp.begin(),it);
+      pND->wpListInProgress.erase(pND->wpListInProgress.begin(),it);
     }
 }
 
@@ -130,22 +130,15 @@ void removeWaypointsUpToOriginCurrentLeg() {
  * Send the active route with all waypoints from the origin of the current leg and onwards.
  * So the waypoint that corresponds with the originID from the BOD message should be the 1st. The destinationID from the BOD message should be the 2nd. Etc.
  */
-void sendPGN129285(const tRTE &rte) {
-
-      if (pND->wp.size() == 1) {
-        handleGarminGPS120GOTO();
-      } else if (rte.type == 'c') {
-        //No need to remove waypoints when rte.type == 'w'
-        removeWaypointsUpToOriginCurrentLeg();
-      }
+void sendPGN129285() {
   
       tN2kMsg N2kMsg;
       int i=0;
-      SetN2kPGN129285(N2kMsg,i, 1, rte.routeID, false, false, "Unknown");
+      SetN2kPGN129285(N2kMsg,i, 1, pND->routeID, false, false, "Unknown");
 
-      for (std::string currWp : pND->wp) {
+      for (std::string currWp : pND->wpListComplete) {
         //Continue adding waypoints as long as they fit within a single message
-        tWPL wpl = pND->wpMap[currWp];
+        tWPL wpl = pND->wpMapComplete[currWp];
         if (wpl.name == currWp) {
           if (debugStream!=0) {
             debugStream->print("129285:");
@@ -157,7 +150,7 @@ void sendPGN129285(const tRTE &rte) {
             //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
             pNMEA2000->SendMsg(N2kMsg); 
             N2kMsg.Clear();
-            SetN2kPGN129285(N2kMsg,i, 1, rte.routeID, false, false, "Unknown");
+            SetN2kPGN129285(N2kMsg,i, 1, pND->routeID, false, false, "Unknown");
             //TODO: Check for the result of the Append, should not fail due to message size. Perhaps some other reason?
             AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude);
           }
@@ -169,6 +162,22 @@ void sendPGN129285(const tRTE &rte) {
       }
       pNMEA2000->SendMsg(N2kMsg);       
 }
+
+/**
+ * Resend PGN129285 at least every 5 seconds.
+ * B&G Triton requires a PGN129285 message around every 10 seconds otherwise display of the destinationID is cleared.
+ * Depending on how fast an updated route is constructed we are sending the same or updated route.
+ */
+void delayedResendPGN129285() {
+
+  static unsigned long timeUpdated=millis();
+
+  if (timeUpdated+5000 < millis()) {
+    timeUpdated=millis();
+    sendPGN129285();
+  }
+}
+
 
 /*
  * 129284 - Navigation Data
@@ -366,27 +375,39 @@ void HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
 /**
  * Handle receiving NMEA0183 RTE message (route).
- * NMEA2000 messages are sent when last correlated RTE message is received. We also need previously send WPL, messages.
- * A single WPL message is sent per NMEA0183 message cycle (RMC, RMB, GGA, WPL) followed by the RTE message(s) in the next cycle.
- * So it can take a while for long routes before alle waypoints are received.
+ * Based on the info which is processed after the last correlated RTE message is received a NMEA2000 messages is periodically sent using a timer.
+ * A timer is used because (at least) B&G Triton requires a new PGN129285 around every 10 sec, but receiving RTE messages could take much longer 
+ * on routes with more then 5 waypoints. So we need to sent the same PGN129285 multiple times in between.
+ * For this we also need previously send WPL, messages. A single WPL message is sent per NMEA0183 message cycle (RMC, RMB, GGA, WPL) followed 
+ * by the RTE message(s) in the next cycle. So it can take a while for long routes before alle waypoints are received and finally the RTE messages.
  */
 void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
   tRTE rte;
   if (NMEA0183ParseRTE_nc(NMEA0183Msg,rte)) {
 
+    pND->routeID = rte.routeID;
+
     //Combine the waypoints of correlated RTE messages in a central ist.
     //Will be processed when the last RTE message is recevied.
     for (char* currWp : rte.wp) {
       std::string wp = currWp;
-      pND->wp.push_back(wp);
+      pND->wpListInProgress.push_back(wp);
     }
 
     if (rte.currSentence == rte.nrOfsentences) {
-      sendPGN129285(rte);
-      //Cleanup dynamic memory and be ready for the next set of WPL messages
-      pND->wp.clear();
-      pND->wpMap.clear();
+      if (pND->wpListInProgress.size() == 1) {
+        handleGarminGPS120GOTO();
+      } else if (rte.type == 'c') {
+        //No need to remove waypoints when rte.type == 'w'
+        removeWaypointsUpToOriginCurrentLeg();
+      }
+      //Create a new complete list and map
+      pND->wpListComplete.clear();
+      pND->wpListComplete.splice(pND->wpListComplete.begin(),pND->wpListInProgress);
+      pND->wpMapComplete.clear();
+      pND->wpMapComplete.swap(pND->wpMapInProgress);
+      //Sending PGN129285 is handled from a timer.     
     }
 
     if (debugStream!=0) {
@@ -411,12 +432,12 @@ void HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   
   tWPL wpl;
   if (NMEA0183ParseWPL_nc(NMEA0183Msg,wpl)) {
-    pND->wpMap[wpl.name] = wpl;
+    pND->wpMapInProgress[wpl.name] = wpl;
     if (debugStream!=0) {
       debugStream->print("WPL: Time="); debugStream->println(millis());
-      debugStream->print("WPL: Name="); debugStream->println(pND->wpMap[wpl.name].name.c_str());
-      debugStream->print("WPL: Latitude="); debugStream->println(pND->wpMap[wpl.name].latitude);
-      debugStream->print("WPL: Longitude="); debugStream->println(pND->wpMap[wpl.name].longitude);
+      debugStream->print("WPL: Name="); debugStream->println(pND->wpMapInProgress[wpl.name].name.c_str());
+      debugStream->print("WPL: Latitude="); debugStream->println(pND->wpMapInProgress[wpl.name].latitude);
+      debugStream->print("WPL: Longitude="); debugStream->println(pND->wpMapInProgress[wpl.name].longitude);
       Serial.print("freeMemory()=");
       Serial.println(freeMemory());
     }

@@ -87,5 +87,5 @@ void loop() {
 
   NMEA2000.ParseMessages();
   NMEA0183_3.ParseMessages();
+  delayedResendPGN129285();
 }
-

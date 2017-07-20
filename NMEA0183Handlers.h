@@ -27,6 +27,8 @@ void DebugNMEA0183Handlers(Stream* _stream);
 
 void HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg);
 
+void delayedResendPGN129285();
+
 #endif
 
 
