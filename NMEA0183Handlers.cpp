@@ -36,6 +36,7 @@ void HandleVTG(const tNMEA0183Msg &NMEA0183Msg);
 void HandleBOD(const tNMEA0183Msg &NMEA0183Msg);
 void HandleRTE(const tNMEA0183Msg &NMEA0183Msg);
 void HandleWPL(const tNMEA0183Msg &NMEA0183Msg);
+void HandleGLL(const tNMEA0183Msg &NMEA0183Msg);
 
 // Internal variables
 tNMEA2000 *pNMEA2000=0;
@@ -52,6 +53,7 @@ tNMEA0183Handler NMEA0183Handlers[]={
   {"BOD",&HandleBOD},
   {"RTE",&HandleRTE},
   {"WPL",&HandleWPL},
+  {"GLL",&HandleGLL},
   {0,0}
 };
 
@@ -97,28 +99,28 @@ double toMagnetic(double True, double Variation) {
  * For NMEA2000 the destination needs to be 2nd waypoint in the route. 
  * So lets at the current location as the 1st waypoint in the route.
  */
-void handleGarminGPS120GOTO() {
+void handleGarminGPS120GOTO(std::list<std::string> &wpList, std::map<std::string,tWPL> &wpMap) {
     tWPL wpl;
     wpl.name = "CURRENT";
     wpl.latitude = pBD->Latitude;
     wpl.longitude = pBD->Longitude;
-    pND->wpMapInProgress[wpl.name] = wpl;
-    pND->wpListInProgress.insert(pND->wpListInProgress.begin(),wpl.name);
+    wpMap[wpl.name] = wpl;
+    wpList.insert(wpList.begin(),wpl.name);
 
 }
 
-void removeWaypointsUpToOriginCurrentLeg() {
+void removeWaypointsUpToOriginCurrentLeg(std::list<std::string> &wpList, std::string originID) {
 
     bool originFound=false;
-    std::list<std::string>::iterator it = pND->wpListInProgress.begin();
-    for (; it!=pND->wpListInProgress.end(); ++it) {
-      if (*it == pND->bod.originID) {
+    std::list<std::string>::iterator it = wpList.begin();
+    for (; it!=wpList.end(); ++it) {
+      if (*it == originID) {
         originFound=true;
         break;
       }
     }
     if (originFound) {
-      pND->wpListInProgress.erase(pND->wpListInProgress.begin(),it);
+      wpList.erase(wpList.begin(),it);
     }
 }
 
@@ -130,15 +132,15 @@ void removeWaypointsUpToOriginCurrentLeg() {
  * Send the active route with all waypoints from the origin of the current leg and onwards.
  * So the waypoint that corresponds with the originID from the BOD message should be the 1st. The destinationID from the BOD message should be the 2nd. Etc.
  */
-void sendPGN129285() {
+void sendPGN129285(std::list<std::string> &wpList, std::map<std::string,tWPL> &wpMap) {
   
       tN2kMsg N2kMsg;
       int i=0;
       SetN2kPGN129285(N2kMsg,i, 1, pND->routeID, false, false, "Unknown");
 
-      for (std::string currWp : pND->wpListComplete) {
+      for (std::string currWp : wpList) {
         //Continue adding waypoints as long as they fit within a single message
-        tWPL wpl = pND->wpMapComplete[currWp];
+        tWPL wpl = wpMap[currWp];
         if (wpl.name == currWp) {
           if (debugStream!=0) {
             debugStream->print("129285:");
@@ -174,7 +176,7 @@ void delayedResendPGN129285() {
 
   if (timeUpdated+5000 < millis()) {
     timeUpdated=millis();
-    sendPGN129285();
+    sendPGN129285(pND->wpListComplete,pND->wpMapComplete);
   }
 }
 
@@ -190,7 +192,7 @@ void delayedResendPGN129285() {
  * It always takes the 2nd waypoint from PGN129285 as DestinationWaypoint.
  * Not sure if that is compliant with NMEA2000 or B&G Trition specific.
  */
-void sendPGN129284() {
+void sendPGN129284(const tRMB &rmb) {
   
       tN2kMsg N2kMsg;
 
@@ -203,22 +205,22 @@ void sendPGN129284() {
       
       //B&G Triton ignores the etaTime and etaDays values and does the calculation by itself. So let's leave them at 0 for now.
       double etaTime, etaDays = 0.0;
-      double Mbtw = toMagnetic(pND->rmb.btw,pBD->Variation);
-      bool ArrivalCircleEntered = pND->rmb.arrivalAlarm == 'A';
+      double Mbtw = toMagnetic(rmb.btw,pBD->Variation);
+      bool ArrivalCircleEntered = rmb.arrivalAlarm == 'A';
       //PerpendicularCrossed not calculated yet.
       //Need to calculate it based on current lat/long, pND->bod.magBearing and pND->rmb.lat/long
       bool PerpendicularCrossed = false;
-      SetN2kNavigationInfo(N2kMsg,1,pND->rmb.dtw,N2khr_magnetic,PerpendicularCrossed,ArrivalCircleEntered,N2kdct_RhumbLine,etaTime,etaDays,
-                          pND->bod.magBearing,Mbtw,originID,destinationID,pND->rmb.latitude,pND->rmb.longitude,pND->rmb.vmg);
+      SetN2kNavigationInfo(N2kMsg,1,rmb.dtw,N2khr_magnetic,PerpendicularCrossed,ArrivalCircleEntered,N2kdct_RhumbLine,etaTime,etaDays,
+                          pND->bod.magBearing,Mbtw,originID,destinationID,rmb.latitude,rmb.longitude,rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
     if (debugStream!=0) {
       debugStream->print("129284: originID="); debugStream->print(pND->bod.originID.c_str());debugStream->print(",");debugStream->println(originID);
       debugStream->print("129284: destinationID="); debugStream->print(pND->bod.destID.c_str());debugStream->print(",");debugStream->println(destinationID);
-      debugStream->print("129284: latitude="); debugStream->println(pND->rmb.latitude,5);
-      debugStream->print("129284: longitude="); debugStream->println(pND->rmb.longitude,5);
+      debugStream->print("129284: latitude="); debugStream->println(rmb.latitude,5);
+      debugStream->print("129284: longitude="); debugStream->println(rmb.longitude,5);
       debugStream->print("129284: ArrivalCircleEntered="); debugStream->println(ArrivalCircleEntered);
-      debugStream->print("129284: VMG="); debugStream->println(pND->rmb.vmg);
-      debugStream->print("129284: DTW="); debugStream->println(pND->rmb.dtw);
+      debugStream->print("129284: VMG="); debugStream->println(rmb.vmg);
+      debugStream->print("129284: DTW="); debugStream->println(rmb.dtw);
       debugStream->print("129284: BTW (Current to Destination="); debugStream->println(Mbtw);
       debugStream->print("129284: BTW (Orign to Desitination)="); debugStream->println(pND->bod.magBearing);
     }
@@ -229,10 +231,10 @@ void sendPGN129284() {
  * Category: Navigation
  * This PGN provides the magnitude of position error perpendicular to the desired course.
  */
-void sendPGN129283() {
+void sendPGN129283(const tRMB &rmb) {
 
   tN2kMsg N2kMsg;
-  SetN2kXTE(N2kMsg,1,N2kxtem_Autonomous, false, pND->rmb.xte);
+  SetN2kXTE(N2kMsg,1,N2kxtem_Autonomous, false, rmb.xte);
   pNMEA2000->SendMsg(N2kMsg);
 }
 
@@ -240,28 +242,34 @@ void sendPGN129283() {
 
 void HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
   if (pBD==0) return;
-  
-  if (NMEA0183ParseRMC_nc(NMEA0183Msg,pBD->GPSTime,pBD->Latitude,pBD->Longitude,pBD->COG,pBD->SOG,pBD->DaysSince1970,pBD->Variation)) {
+
+  tRMC rmc;
+  if (NMEA0183ParseRMC_nc(NMEA0183Msg,rmc) && rmc.status == 'A') {
     if (pNMEA2000!=0) {
       tN2kMsg N2kMsg;
-      double MCOG = toMagnetic(pBD->COG,pBD->Variation);
+      double MCOG = toMagnetic(rmc.trueCOG,rmc.variation);
       //PGN129026
-      SetN2kCOGSOGRapid(N2kMsg,1,N2khr_magnetic,MCOG,pBD->SOG); 
+      SetN2kCOGSOGRapid(N2kMsg,1,N2khr_magnetic,MCOG,rmc.SOG); 
       pNMEA2000->SendMsg(N2kMsg);
       //PGN129025
-      SetN2kLatLonRapid(N2kMsg,pBD->Latitude,pBD->Longitude);
+      SetN2kLatLonRapid(N2kMsg,rmc.latitude,rmc.longitude);
       pNMEA2000->SendMsg(N2kMsg);
+      pBD->Latitude = rmc.latitude;
+      pBD->Longitude = rmc.longitude;
+      pBD->DaysSince1970 = rmc.daysSince1970;
+      pBD->Variation = rmc.variation;
     }
     if (debugStream!=0) {
-      debugStream->print("RMC: GPSTime="); debugStream->println(pBD->GPSTime);
-      debugStream->print("RMC: Latitude="); debugStream->println(pBD->Latitude,5);
-      debugStream->print("RMC: Longitude="); debugStream->println(pBD->Longitude,5);
-      debugStream->print("RMC: COG="); debugStream->println(pBD->COG);
-      debugStream->print("RMC: SOG="); debugStream->println(pBD->SOG);
-      debugStream->print("RMC: DaysSince1970="); debugStream->println(pBD->DaysSince1970);
-      debugStream->print("RMC: Variation="); debugStream->println(pBD->Variation);
+      debugStream->print("RMC: GPSTime="); debugStream->println(rmc.GPSTime);
+      debugStream->print("RMC: Latitude="); debugStream->println(rmc.latitude,5);
+      debugStream->print("RMC: Longitude="); debugStream->println(rmc.longitude,5);
+      debugStream->print("RMC: COG="); debugStream->println(rmc.trueCOG);
+      debugStream->print("RMC: SOG="); debugStream->println(rmc.SOG);
+      debugStream->print("RMC: DaysSince1970="); debugStream->println(rmc.daysSince1970);
+      debugStream->print("RMC: Variation="); debugStream->println(rmc.variation);
     }
-  } else if (debugStream!=0) { debugStream->println("Failed to parse RMC"); }
+  } else if (debugStream!=0 && rmc.status == 'V') { debugStream->println("RMC is Void");
+  } else if (debugStream!=0 && rmc.status == 'V') { debugStream->println("Failed to parse RMC"); }
 }
 
 /**
@@ -271,88 +279,116 @@ void HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
 void HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
   if (pBD==0) return;
 
-  if (NMEA0183ParseRMB_nc(NMEA0183Msg, pND->rmb)) {    
+  tRMB rmb;
+  if (NMEA0183ParseRMB_nc(NMEA0183Msg, rmb)  && rmb.status == 'A') {
     if (pNMEA2000!=0) {
-      sendPGN129283();
-      sendPGN129284();
+      sendPGN129283(rmb);
+      sendPGN129284(rmb);
     }
     if (debugStream!=0) {
-      debugStream->print("RMB: XTE="); debugStream->println(pND->rmb.xte);
-      debugStream->print("RMB: DTW="); debugStream->println(pND->rmb.dtw);
-      debugStream->print("RMB: BTW="); debugStream->println(pND->rmb.btw);
-      debugStream->print("RMB: VMG="); debugStream->println(pND->rmb.vmg);
-      debugStream->print("RMB: OriginID="); debugStream->println(pND->rmb.originID.c_str());
-      debugStream->print("RMB: DestinationID="); debugStream->println(pND->rmb.destID.c_str());
-      debugStream->print("RMB: Latittude="); debugStream->println(pND->rmb.latitude,5);
-      debugStream->print("RMB: Longitude="); debugStream->println(pND->rmb.longitude,5);
+      debugStream->print("RMB: XTE="); debugStream->println(rmb.xte);
+      debugStream->print("RMB: DTW="); debugStream->println(rmb.dtw);
+      debugStream->print("RMB: BTW="); debugStream->println(rmb.btw);
+      debugStream->print("RMB: VMG="); debugStream->println(rmb.vmg);
+      debugStream->print("RMB: OriginID="); debugStream->println(rmb.originID.c_str());
+      debugStream->print("RMB: DestinationID="); debugStream->println(rmb.destID.c_str());
+      debugStream->print("RMB: Latittude="); debugStream->println(rmb.latitude,5);
+      debugStream->print("RMB: Longitude="); debugStream->println(rmb.longitude,5);
     }
+  } else if (debugStream!=0 && rmb.status == 'V') { debugStream->println("RMB is Void");
   } else if (debugStream!=0) { debugStream->println("Failed to parse RMB"); }
 }
 
 void HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
   if (pBD==0) return;
-  
-  if (NMEA0183ParseGGA_nc(NMEA0183Msg,pBD->GPSTime,pBD->Latitude,pBD->Longitude,
-                   pBD->GPSQualityIndicator,pBD->SatelliteCount,pBD->HDOP,pBD->Altitude,pBD->GeoidalSeparation,
-                   pBD->DGPSAge,pBD->DGPSReferenceStationID)) {
+
+  tGGA gga;
+  if (NMEA0183ParseGGA_nc(NMEA0183Msg,gga) && gga.GPSQualityIndicator > 0) {
     if (pNMEA2000!=0) {
       tN2kMsg N2kMsg;
       //129029
-      SetN2kGNSS(N2kMsg,1,pBD->DaysSince1970,pBD->GPSTime,pBD->Latitude,pBD->Longitude,pBD->Altitude,
-                N2kGNSSt_GPS,GNSMethofNMEA0183ToN2k(pBD->GPSQualityIndicator),pBD->SatelliteCount,pBD->HDOP,0,
-                pBD->GeoidalSeparation,1,N2kGNSSt_GPS,pBD->DGPSReferenceStationID,pBD->DGPSAge
+      SetN2kGNSS(N2kMsg,1,pBD->DaysSince1970,gga.GPSTime,gga.latitude,gga.longitude,gga.altitude,
+                N2kGNSSt_GPS,GNSMethofNMEA0183ToN2k(gga.GPSQualityIndicator),gga.satelliteCount,gga.HDOP,0,
+                gga.geoidalSeparation,1,N2kGNSSt_GPS,gga.DGPSReferenceStationID,gga.DGPSAge
                 );
       pNMEA2000->SendMsg(N2kMsg); 
+      pBD->Latitude = gga.latitude;
+      pBD->Longitude = gga.longitude;
     }
 
     if (debugStream!=0) {
-      debugStream->print("GGA: Time="); debugStream->println(pBD->GPSTime);
-      debugStream->print("GGA: Latitude="); debugStream->println(pBD->Latitude,5);
-      debugStream->print("GGA: Longitude="); debugStream->println(pBD->Longitude,5);
-      debugStream->print("GGA: Altitude="); debugStream->println(pBD->Altitude,1);
-      debugStream->print("GGA: GPSQualityIndicator="); debugStream->println(pBD->GPSQualityIndicator);
-      debugStream->print("GGA: SatelliteCount="); debugStream->println(pBD->SatelliteCount);
-      debugStream->print("GGA: HDOP="); debugStream->println(pBD->HDOP);
-      debugStream->print("GGA: GeoidalSeparation="); debugStream->println(pBD->GeoidalSeparation);
-      debugStream->print("GGA: DGPSAge="); debugStream->println(pBD->DGPSAge);
-      debugStream->print("GGA: DGPSReferenceStationID="); debugStream->println(pBD->DGPSReferenceStationID);
+      debugStream->print("GGA: Time="); debugStream->println(gga.GPSTime);
+      debugStream->print("GGA: Latitude="); debugStream->println(gga.latitude,5);
+      debugStream->print("GGA: Longitude="); debugStream->println(gga.longitude,5);
+      debugStream->print("GGA: Altitude="); debugStream->println(gga.altitude,1);
+      debugStream->print("GGA: GPSQualityIndicator="); debugStream->println(gga.GPSQualityIndicator);
+      debugStream->print("GGA: SatelliteCount="); debugStream->println(gga.satelliteCount);
+      debugStream->print("GGA: HDOP="); debugStream->println(gga.HDOP);
+      debugStream->print("GGA: GeoidalSeparation="); debugStream->println(gga.geoidalSeparation);
+      debugStream->print("GGA: DGPSAge="); debugStream->println(gga.DGPSAge);
+      debugStream->print("GGA: DGPSReferenceStationID="); debugStream->println(gga.DGPSReferenceStationID);
     }
+  } else if (debugStream!=0 && gga.GPSQualityIndicator == 0) { debugStream->println("GGA invalid GPS fix.");
   } else if (debugStream!=0) { debugStream->println("Failed to parse GGA"); }
+}
+
+void HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
+  if (pBD==0) return;
+
+  tGLL gll;
+  if (NMEA0183ParseGLL_nc(NMEA0183Msg,gll) && gll.status == 'A') {
+    if (pNMEA2000!=0) {
+      tN2kMsg N2kMsg;
+      //PGN129025
+      SetN2kLatLonRapid(N2kMsg, gll.latitude, gll.longitude);
+      pNMEA2000->SendMsg(N2kMsg);
+      pBD->Latitude = gll.latitude;
+      pBD->Longitude = gll.longitude;
+    }
+
+    if (debugStream!=0) {
+      debugStream->print("GLL: Time="); debugStream->println(gll.GPSTime);
+      debugStream->print("GLL: Latitude="); debugStream->println(gll.latitude,5);
+      debugStream->print("GLL: Longitude="); debugStream->println(gll.longitude,5);
+    }
+  } else if (debugStream!=0 && gll.status == 'V') { debugStream->println("GLL is Void");
+  } else if (debugStream!=0) { debugStream->println("Failed to parse GLL"); }
 }
 
 void HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
   if (pBD==0) return;
-  
-  if (NMEA0183ParseHDT_nc(NMEA0183Msg,pBD->TrueHeading)) {
+
+  double TrueHeading;
+  if (NMEA0183ParseHDT_nc(NMEA0183Msg,TrueHeading)) {
     if (pNMEA2000!=0) { 
       tN2kMsg N2kMsg;
       // Stupid Raymarine can not use true heading
-      double MHeading = toMagnetic(pBD->TrueHeading,pBD->Variation);
+      double MHeading = toMagnetic(TrueHeading,pBD->Variation);
       SetN2kMagneticHeading(N2kMsg,1,MHeading,0,pBD->Variation);
-//      SetN2kTrueHeading(N2kMsg,1,pBD->TrueHeading);
+//      SetN2kTrueHeading(N2kMsg,1,TrueHeading);
       pNMEA2000->SendMsg(N2kMsg);
     }
     if (debugStream!=0) {
-      debugStream->print("True heading="); debugStream->println(pBD->TrueHeading);
+      debugStream->print("True heading="); debugStream->println(TrueHeading);
     }
   } else if (debugStream!=0) { debugStream->println("Failed to parse HDT"); }
 }
 
 void HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
- double MagneticCOG;
+ double MagneticCOG, COG, SOG;
   if (pBD==0) return;
   
-  if (NMEA0183ParseVTG_nc(NMEA0183Msg,pBD->COG,MagneticCOG,pBD->SOG)) {
-      pBD->Variation=pBD->COG-MagneticCOG; // Save variation for Magnetic heading
+  if (NMEA0183ParseVTG_nc(NMEA0183Msg,COG,MagneticCOG,SOG)) {
+      pBD->Variation=COG-MagneticCOG; // Save variation for Magnetic heading
     if (pNMEA2000!=0) { 
       tN2kMsg N2kMsg;
-      SetN2kCOGSOGRapid(N2kMsg,1,N2khr_true,pBD->COG,pBD->SOG);
+      SetN2kCOGSOGRapid(N2kMsg,1,N2khr_true,COG,SOG);
       pNMEA2000->SendMsg(N2kMsg);
       //SetN2kBoatSpeed(N2kMsg,1,SOG);
       //NMEA2000.SendMsg(N2kMsg);
     }
     if (debugStream!=0) {
-      debugStream->print("True heading="); debugStream->println(pBD->TrueHeading);
+      debugStream->print("COG="); debugStream->println(COG);
     }
   } else if (debugStream!=0) { debugStream->println("Failed to parse VTG"); }
 }
@@ -397,10 +433,10 @@ void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
     if (rte.currSentence == rte.nrOfsentences) {
       if (pND->wpListInProgress.size() == 1) {
-        handleGarminGPS120GOTO();
+        handleGarminGPS120GOTO(pND->wpListInProgress, pND->wpMapInProgress);
       } else if (rte.type == 'c') {
         //No need to remove waypoints when rte.type == 'w'
-        removeWaypointsUpToOriginCurrentLeg();
+        removeWaypointsUpToOriginCurrentLeg(pND->wpListInProgress,pND->bod.originID);
       }
       //Create a new complete list and map
       pND->wpListComplete.clear();
