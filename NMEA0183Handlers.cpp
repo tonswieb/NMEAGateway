@@ -41,7 +41,6 @@ void HandleGLL(const tNMEA0183Msg &NMEA0183Msg);
 // Internal variables
 tNMEA2000 *pNMEA2000=0;
 tBoatData *pBD=0;
-tNavData *pND=0;
 Stream* debugStream=0;
 
 tNMEA0183Handler NMEA0183Handlers[]={
@@ -57,10 +56,9 @@ tNMEA0183Handler NMEA0183Handlers[]={
   {0,0}
 };
 
-void InitNMEA0183Handlers(tNMEA2000 *_NMEA2000, tBoatData *_BoatData, tNavData *_NavData) {
+void InitNMEA0183Handlers(tNMEA2000 *_NMEA2000, tBoatData *_BoatData) {
   pNMEA2000=_NMEA2000;
   pBD=_BoatData;
-  pND=_NavData;
 }
 
 void DebugNMEA0183Handlers(Stream* _stream) {
@@ -99,28 +97,28 @@ double toMagnetic(double True, double Variation) {
  * For NMEA2000 the destination needs to be 2nd waypoint in the route. 
  * So lets at the current location as the 1st waypoint in the route.
  */
-void handleGarminGPS120GOTO(std::list<std::string> &wpList, std::map<std::string,tWPL> &wpMap) {
+void handleGarminGPS120GOTO(tRoute &route) {
     tWPL wpl;
     wpl.name = "CURRENT";
     wpl.latitude = pBD->Latitude;
     wpl.longitude = pBD->Longitude;
-    wpMap[wpl.name] = wpl;
-    wpList.insert(wpList.begin(),wpl.name);
+    route.wpMap[wpl.name] = wpl;
+    route.wpList.insert(route.wpList.begin(),wpl.name);
 
 }
 
-void removeWaypointsUpToOriginCurrentLeg(std::list<std::string> &wpList, std::string originID) {
+void removeWaypointsUpToOriginCurrentLeg(tRoute &route) {
 
     bool originFound=false;
-    std::list<std::string>::iterator it = wpList.begin();
-    for (; it!=wpList.end(); ++it) {
-      if (*it == originID) {
+    std::list<std::string>::iterator it = route.wpList.begin();
+    for (; it!=route.wpList.end(); ++it) {
+      if (*it == pBD->bod.originID) {
         originFound=true;
         break;
       }
     }
     if (originFound) {
-      wpList.erase(wpList.begin(),it);
+      route.wpList.erase(route.wpList.begin(),it);
     }
 }
 
@@ -132,15 +130,15 @@ void removeWaypointsUpToOriginCurrentLeg(std::list<std::string> &wpList, std::st
  * Send the active route with all waypoints from the origin of the current leg and onwards.
  * So the waypoint that corresponds with the originID from the BOD message should be the 1st. The destinationID from the BOD message should be the 2nd. Etc.
  */
-void sendPGN129285(std::list<std::string> &wpList, std::map<std::string,tWPL> &wpMap) {
+void sendPGN129285(tRoute &route) {
   
       tN2kMsg N2kMsg;
       int i=0;
-      SetN2kPGN129285(N2kMsg,i, 1, pND->routeID, false, false, "Unknown");
+      SetN2kPGN129285(N2kMsg,i, 1, route.routeID, false, false, "Unknown");
 
-      for (std::string currWp : wpList) {
+      for (std::string currWp : route.wpList) {
         //Continue adding waypoints as long as they fit within a single message
-        tWPL wpl = wpMap[currWp];
+        tWPL wpl = route.wpMap[currWp];
         if (wpl.name == currWp) {
           if (debugStream!=0) {
             debugStream->print("129285:");
@@ -152,7 +150,7 @@ void sendPGN129285(std::list<std::string> &wpList, std::map<std::string,tWPL> &w
             //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
             pNMEA2000->SendMsg(N2kMsg); 
             N2kMsg.Clear();
-            SetN2kPGN129285(N2kMsg,i, 1, pND->routeID, false, false, "Unknown");
+            SetN2kPGN129285(N2kMsg,i, 1, route.routeID, false, false, "Unknown");
             //TODO: Check for the result of the Append, should not fail due to message size. Perhaps some other reason?
             AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude);
           }
@@ -176,7 +174,7 @@ void delayedResendPGN129285() {
 
   if (timeUpdated+5000 < millis()) {
     timeUpdated=millis();
-    sendPGN129285(pND->wpListComplete,pND->wpMapComplete);
+    sendPGN129285(pBD->routeComplete);
   }
 }
 
@@ -211,18 +209,18 @@ void sendPGN129284(const tRMB &rmb) {
       //Need to calculate it based on current lat/long, pND->bod.magBearing and pND->rmb.lat/long
       bool PerpendicularCrossed = false;
       SetN2kNavigationInfo(N2kMsg,1,rmb.dtw,N2khr_magnetic,PerpendicularCrossed,ArrivalCircleEntered,N2kdct_RhumbLine,etaTime,etaDays,
-                          pND->bod.magBearing,Mbtw,originID,destinationID,rmb.latitude,rmb.longitude,rmb.vmg);
+                          pBD->bod.magBearing,Mbtw,originID,destinationID,rmb.latitude,rmb.longitude,rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
     if (debugStream!=0) {
-      debugStream->print("129284: originID="); debugStream->print(pND->bod.originID.c_str());debugStream->print(",");debugStream->println(originID);
-      debugStream->print("129284: destinationID="); debugStream->print(pND->bod.destID.c_str());debugStream->print(",");debugStream->println(destinationID);
+      debugStream->print("129284: originID="); debugStream->print(pBD->bod.originID.c_str());debugStream->print(",");debugStream->println(originID);
+      debugStream->print("129284: destinationID="); debugStream->print(pBD->bod.destID.c_str());debugStream->print(",");debugStream->println(destinationID);
       debugStream->print("129284: latitude="); debugStream->println(rmb.latitude,5);
       debugStream->print("129284: longitude="); debugStream->println(rmb.longitude,5);
       debugStream->print("129284: ArrivalCircleEntered="); debugStream->println(ArrivalCircleEntered);
       debugStream->print("129284: VMG="); debugStream->println(rmb.vmg);
       debugStream->print("129284: DTW="); debugStream->println(rmb.dtw);
       debugStream->print("129284: BTW (Current to Destination="); debugStream->println(Mbtw);
-      debugStream->print("129284: BTW (Orign to Desitination)="); debugStream->println(pND->bod.magBearing);
+      debugStream->print("129284: BTW (Orign to Desitination)="); debugStream->println(pBD->bod.magBearing);
     }
 }
 
@@ -399,12 +397,12 @@ void HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
  */
 void HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
-  if (NMEA0183ParseBOD_nc(NMEA0183Msg,pND->bod)) {
+  if (NMEA0183ParseBOD_nc(NMEA0183Msg,pBD->bod)) {
     if (debugStream!=0) {
-      debugStream->print("BOD: True heading="); debugStream->println(pND->bod.trueBearing);
-      debugStream->print("BOD: Magnetic heading="); debugStream->println(pND->bod.magBearing);
-      debugStream->print("BOD: Origin ID="); debugStream->println(pND->bod.originID.c_str());
-      debugStream->print("BOD: Dest ID="); debugStream->println(pND->bod.destID.c_str());
+      debugStream->print("BOD: True heading="); debugStream->println(pBD->bod.trueBearing);
+      debugStream->print("BOD: Magnetic heading="); debugStream->println(pBD->bod.magBearing);
+      debugStream->print("BOD: Origin ID="); debugStream->println(pBD->bod.originID.c_str());
+      debugStream->print("BOD: Dest ID="); debugStream->println(pBD->bod.destID.c_str());
     }
   } else if (debugStream!=0) { debugStream->println("Failed to parse BOD"); }
 }
@@ -422,27 +420,27 @@ void HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
   tRTE rte;
   if (NMEA0183ParseRTE_nc(NMEA0183Msg,rte)) {
 
-    pND->routeID = rte.routeID;
+    pBD->routeInProgress.routeID = rte.routeID;
 
     //Combine the waypoints of correlated RTE messages in a central ist.
     //Will be processed when the last RTE message is recevied.
     for (char* currWp : rte.wp) {
       std::string wp = currWp;
-      pND->wpListInProgress.push_back(wp);
+      pBD->routeInProgress.wpList.push_back(wp);
     }
 
     if (rte.currSentence == rte.nrOfsentences) {
-      if (pND->wpListInProgress.size() == 1) {
-        handleGarminGPS120GOTO(pND->wpListInProgress, pND->wpMapInProgress);
+      if (pBD->routeInProgress.wpList.size() == 1) {
+        handleGarminGPS120GOTO(pBD->routeInProgress);
       } else if (rte.type == 'c') {
         //No need to remove waypoints when rte.type == 'w'
-        removeWaypointsUpToOriginCurrentLeg(pND->wpListInProgress,pND->bod.originID);
+        removeWaypointsUpToOriginCurrentLeg(pBD->routeInProgress);
       }
       //Create a new complete list and map
-      pND->wpListComplete.clear();
-      pND->wpListComplete.splice(pND->wpListComplete.begin(),pND->wpListInProgress);
-      pND->wpMapComplete.clear();
-      pND->wpMapComplete.swap(pND->wpMapInProgress);
+      pBD->routeComplete.wpList.clear();
+      pBD->routeComplete.wpList.splice(pBD->routeComplete.wpList.begin(),pBD->routeInProgress.wpList);
+      pBD->routeComplete.wpMap.clear();
+      pBD->routeComplete.wpMap.swap(pBD->routeInProgress.wpMap);
       //Sending PGN129285 is handled from a timer.     
     }
 
@@ -468,12 +466,12 @@ void HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   
   tWPL wpl;
   if (NMEA0183ParseWPL_nc(NMEA0183Msg,wpl)) {
-    pND->wpMapInProgress[wpl.name] = wpl;
+    pBD->routeInProgress.wpMap[wpl.name] = wpl;
     if (debugStream!=0) {
       debugStream->print("WPL: Time="); debugStream->println(millis());
-      debugStream->print("WPL: Name="); debugStream->println(pND->wpMapInProgress[wpl.name].name.c_str());
-      debugStream->print("WPL: Latitude="); debugStream->println(pND->wpMapInProgress[wpl.name].latitude);
-      debugStream->print("WPL: Longitude="); debugStream->println(pND->wpMapInProgress[wpl.name].longitude);
+      debugStream->print("WPL: Name="); debugStream->println(pBD->routeInProgress.wpMap[wpl.name].name.c_str());
+      debugStream->print("WPL: Latitude="); debugStream->println(pBD->routeInProgress.wpMap[wpl.name].latitude);
+      debugStream->print("WPL: Longitude="); debugStream->println(pBD->routeInProgress.wpMap[wpl.name].longitude);
       Serial.print("freeMemory()=");
       Serial.println(freeMemory());
     }
