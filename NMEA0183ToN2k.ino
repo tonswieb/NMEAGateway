@@ -14,77 +14,20 @@
  so I can add them for others use.
 */
 
-//#define N2K_SOURCE 15
-//#define USE_N2K_MCP_CAN USE_N2K_MCP_CAN
-//#define N2k_CAN_INT_PIN 10
-//#define N2k_SPI_CS_PIN 53
-#define USE_MCP_CAN_CLOCK_SET 8
-
-#include <StandardCplusplus.h>
-#include <Arduino.h>
-#include <Time.h>
-#include <NMEA2000_CAN.h>  // This will automatically choose right CAN library and create suitable NMEA2000 object
-#include <N2kMessages.h>
-#include <N2kMsg.h>
-#include <NMEA2000.h>
-#include <NMEA0183.h>
-#include <NMEA0183Msg.h>
-#include <NMEA0183Messages.h>
 #include "NMEA0183Handlers.h"
-#include "BoatData.h"
 
-#define NMEA0183SourceGPSCompass 3
-#define NMEA0183SourceGPS 1
-
-tBoatData BoatData;
-
-tNMEA0183Msg NMEA0183Msg;
-tNMEA0183 NMEA0183_3;
-
-// List here messages your device will transmit.
-const unsigned long TransmitMessages[] PROGMEM={129283L,129284L,129285L,126992L,129025L,129026L,129029L,0};
+NMEA0183Handler * phandler;
 
 void setup() {
 
-  // Setup NMEA2000 system
   Serial.begin(115200);
-  NMEA2000.SetProductInformation("00000008", // Manufacturer's Model serial code
-                                 107, // Manufacturer's product code
-                                 "NMEA0183 -> N2k -> PC",  // Manufacturer's Model ID
-                                 "1.0.0.0 (2017-07-16)",  // Manufacturer's Software version code
-                                 "1.0.0.0 (2017-07-16)" // Manufacturer's Model version
-                                 );
-  // Det device information
-  NMEA2000.SetDeviceInformation(8, // Unique number. Use e.g. Serial number.
-                                130, // Device function=PC Gateway. See codes on http://www.nmea.org/Assets/20120726%20nmea%202000%20class%20%26%20function%20codes%20v%202.00.pdf
-                                25, // Device class=Inter/Intranetwork Device. See codes on http://www.nmea.org/Assets/20120726%20nmea%202000%20class%20%26%20function%20codes%20v%202.00.pdf
-                                2046 // Just choosen free from code list on http://www.nmea.org/Assets/20121020%20nmea%202000%20registration%20list.pdf                               
-                               );
-
-
-  NMEA2000.SetForwardStream(&Serial);
-  // If you want to use simple ascii monitor like Arduino Serial Monitor, uncomment next line
-  NMEA2000.SetForwardType(tNMEA2000::fwdt_Text); // Show in clear text. Leave uncommented for default Actisense format.
-
-  // If you also want to see all traffic on the bus use N2km_ListenAndNode instead of N2km_NodeOnly below
-  NMEA2000.SetMode(tNMEA2000::N2km_NodeOnly,25);
-  //NMEA2000.SetDebugMode(tNMEA2000::dm_Actisense); // Uncomment this, so you can test code without CAN bus chips on Arduino Mega
-  NMEA2000.EnableForward(false); // Disable all msg forwarding to USB (=Serial)
-  // Here we tell library, which PGNs we transmit
-  NMEA2000.ExtendTransmitMessages(TransmitMessages);
-  NMEA2000.Open();
-
-  // Setup NMEA0183 ports and handlers
-  InitNMEA0183Handlers(&NMEA2000, &BoatData);
-  //DebugNMEA0183Handlers(&Serial);
-  NMEA0183_3.SetMsgHandler(HandleNMEA0183Msg);
-
-  NMEA0183_3.Begin(&Serial3,NMEA0183SourceGPSCompass, 4800);
+  phandler = new NMEA0183Handler(&Serial3, &Serial);
+//  phandler = new NMEA0183Handler(&Serial3, &Serial, &Serial, false);
 }
 
 void loop() {
 
-  NMEA2000.ParseMessages();
-  NMEA0183_3.ParseMessages();
-  delayedResendPGN129285();
+  phandler->handleLoop();
 }
+
+
