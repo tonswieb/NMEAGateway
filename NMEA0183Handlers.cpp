@@ -76,7 +76,7 @@ NMEA0183Handler::NMEA0183Handler(Stream* gps, Stream* forward, Stream* debugStre
   NMEA2000.SetForwardStream(forward);
   NMEA2000.SetForwardType(tNMEA2000::fwdt_Text);
   NMEA2000.SetMode(tNMEA2000::N2km_NodeOnly,25);
-  NMEA2000.EnableForward(forwardNMEA2000); // Disable all msg forwarding to USB (=Serial)
+  NMEA2000.EnableForward(forwardNMEA2000);
   NMEA2000.ExtendTransmitMessages(TransmitMessages);
   NMEA2000.Open();
 
