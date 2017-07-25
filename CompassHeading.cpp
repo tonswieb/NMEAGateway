@@ -46,7 +46,7 @@ Author: Ton Swieb
 void CompassHeading::handleLoop() {
 
   static unsigned long timeUpdated=millis();
-  if (timeUpdated+5000 < millis()) {
+  if (timeUpdated+100 < millis()) {
     timeUpdated=millis();
     Vector norm = compass.readNormalize();
 

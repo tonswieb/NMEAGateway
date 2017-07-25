@@ -16,30 +16,30 @@
 
 #define USE_MCP_CAN_CLOCK_SET 8
 #include <NMEA2000_CAN.h>  // This will automatically choose right CAN library and create suitable NMEA2000 object
-#include "NMEA0183GPSGateway.h"
+#include "NMEA0183Gateway.h"
 #include "CompassHeading.h"
 
-NMEA0183GPSGateway * pGpsGateway;
+NMEA0183Gateway * pNmea0183Gateway;
 CompassHeading * pCompassHeading;
-// List here messages your device will transmit.
-const unsigned long TransmitMessages[] PROGMEM={127250L,129283L,129284L,129285L,126992L,129025L,129026L,129029L,0};
 
 void setup() {
 
   Serial.begin(115200);
   setupNMEA2000Lib(&NMEA2000, &Serial);
-  pGpsGateway = new NMEA0183GPSGateway(&NMEA2000, &Serial3, &Serial);
-//  pCompassHeading = new CompassHeading(&NMEA2000,&Serial);
+  pNmea0183Gateway = new NMEA0183Gateway(&NMEA2000, &Serial3, &Serial);
+  pCompassHeading = new CompassHeading(&NMEA2000,&Serial);
 }
 
 void loop() {
 
-  pGpsGateway->handleLoop();
-//  pCompassHeading->handleLoop();
+  pNmea0183Gateway->handleLoop();
+  pCompassHeading->handleLoop();
 }
 
 void setupNMEA2000Lib(tNMEA2000* pNMEA2000, Stream* forwardStream) {
   
+  // List here messages your device will transmit.
+  unsigned long TransmitMessages[] PROGMEM={127250L,129283L,129284L,129285L,126992L,129025L,129026L,129029L,0};
   pNMEA2000->SetProductInformation("00000008",107,"NMEA0183 -> N2k -> PC","1.0.0.0 (2017-07-16)","1.0.0.0 (2017-07-16)" );
   pNMEA2000->SetDeviceInformation(8,130,25,2046);
   pNMEA2000->SetForwardStream(forwardStream);

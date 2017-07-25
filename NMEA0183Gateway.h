@@ -13,8 +13,8 @@ Author: Timo Lappalainen
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 */
  
-#ifndef _NMEA0183GPSGateway_H_
-#define _NMEA0183GPSGateway_H_
+#ifndef _NMEA0183Gateway_H_
+#define _NMEA0183Gateway_H_
 
 #include <StandardCplusplus.h>
 #include <list>
@@ -46,7 +46,7 @@ struct tRoute {
     
 };
 
-class NMEA0183GPSGateway {
+class NMEA0183Gateway {
 
   private:  
     unsigned long DaysSince1970;   // Days since 1970-01-01
@@ -55,7 +55,7 @@ class NMEA0183GPSGateway {
     tBOD bod;
     tRoute routeComplete;
     tRoute routeInProgress;
-    tNMEA0183 NMEA0183_3;
+    tNMEA0183 NMEA0183;
     tNMEA2000* pNMEA2000;
     Stream* debugStream=0;
 
@@ -66,6 +66,7 @@ class NMEA0183GPSGateway {
     void HandleRMB(const tNMEA0183Msg &NMEA0183Msg);
     void HandleRMC(const tNMEA0183Msg &NMEA0183Msg);
     void HandleGGA(const tNMEA0183Msg &NMEA0183Msg);
+    void HandleHDT(const tNMEA0183Msg &NMEA0183Msg);
     void HandleVTG(const tNMEA0183Msg &NMEA0183Msg);
     void HandleBOD(const tNMEA0183Msg &NMEA0183Msg);
     void HandleRTE(const tNMEA0183Msg &NMEA0183Msg);
@@ -73,7 +74,7 @@ class NMEA0183GPSGateway {
     void HandleGLL(const tNMEA0183Msg &NMEA0183Msg);
   
   public:
-    NMEA0183GPSGateway(tNMEA2000* pNMEA2000, Stream* gps, Stream* debugStream = 0);
+    NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream* debugStream = 0);
     void handleLoop();
 };
 

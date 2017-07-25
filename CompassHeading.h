@@ -25,11 +25,11 @@ Author: Ton Swieb
 class CompassHeading {
 
   private:
-	HMC5883L compass;
+  	HMC5883L compass;
     Stream* debugStream=0;
-	tNMEA2000* pNMEA2000;
+  	tNMEA2000* pNMEA2000;
 
-	void sendPGN127250(const double &magHeading, const double &variation, const double &deviation);
+  	void sendPGN127250(const double &magHeading, const double &variation, const double &deviation);
   
   public:
     CompassHeading(tNMEA2000* pNMEA2000, Stream* debugStream = 0);
