@@ -13,10 +13,11 @@ Author: Ton Swieb
  
 #include "CompassHeading.h"
 
-  CompassHeading::CompassHeading(tNMEA2000* pNMEA2000, Stream* debugStream = 0) {
+  CompassHeading::CompassHeading(tNMEA2000* pNMEA2000, Stream* debugStream = 0, unsigned long updateInterval) {
 
   this->debugStream = debugStream;
   this->pNMEA2000 = pNMEA2000;
+  this->updateInterval = updateInterval;
 
   // Initialize Initialize HMC5883L
 	  while (!compass.begin())
@@ -27,27 +28,18 @@ Author: Ton Swieb
 	    delay(500);
 	  }  	
 
-  // Set measurement range
   compass.setRange(HMC5883L_RANGE_1_3GA);
-
-  // Set measurement mode
   compass.setMeasurementMode(HMC5883L_CONTINOUS);
-
-  // Set data rate
   compass.setDataRate(HMC5883L_DATARATE_30HZ);
-
-  // Set number of samples averaged
   compass.setSamples(HMC5883L_SAMPLES_8);
-
   // Set calibration offset. See HMC5883L_calibration.ino
   compass.setOffset(0, 0);
 }
 
 void CompassHeading::handleLoop() {
 
-  static unsigned long timeUpdated=millis();
-  if (timeUpdated+100 < millis()) {
-    timeUpdated=millis();
+  if (lastUpdate+updateInterval < millis()) {
+    lastUpdate=millis();
     Vector norm = compass.readNormalize();
 
     // Calculate heading
@@ -61,7 +53,7 @@ void CompassHeading::handleLoop() {
 void CompassHeading::sendPGN127250(const double &magHeading, const double &variation, const double &deviation) {
 
     tN2kMsg N2kMsg;
-    SetN2kMagneticHeading(N2kMsg,1,magHeading);
+    SetN2kMagneticHeading(N2kMsg,1,magHeading,deviation, variation);
     pNMEA2000->SendMsg(N2kMsg);
     if (debugStream!=0) {
       debugStream->print("Compass: Heading="); debugStream->println(magHeading);
