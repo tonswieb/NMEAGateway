@@ -1,5 +1,5 @@
 /* 
-NMEA0183Handlers.cpp
+NMEA0183GPSGateway.cpp
 
 2015 Copyright (c) Kave Oy, www.kave.fi  All right reserved.
 
@@ -13,9 +13,7 @@ Author: Timo Lappalainen
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 */
  
-#include "NMEA0183Handlers.h"
-#define USE_MCP_CAN_CLOCK_SET 8
-#include <NMEA2000_CAN.h>  // This will automatically choose right CAN library and create suitable NMEA2000 object
+#include "NMEA0183GPSGateway.h"
 
 #define PI_2 6.283185307179586476925286766559
 
@@ -67,19 +65,10 @@ void removeWaypointsUpToOriginCurrentLeg(tRoute &route, const std::string origin
   }
 }
 
-NMEA0183Handler::NMEA0183Handler(Stream* gps, Stream* forward, Stream* debugStream, bool forwardNMEA2000) {
+NMEA0183GPSGateway::NMEA0183GPSGateway(tNMEA2000* pNMEA2000, Stream* gps, Stream* debugStream) {
 
   this->debugStream = debugStream;
-
-  NMEA2000.SetProductInformation("00000008",107,"NMEA0183 -> N2k -> PC","1.0.0.0 (2017-07-16)","1.0.0.0 (2017-07-16)" );
-  NMEA2000.SetDeviceInformation(8,130,25,2046);
-  NMEA2000.SetForwardStream(forward);
-  NMEA2000.SetForwardType(tNMEA2000::fwdt_Text);
-  NMEA2000.SetMode(tNMEA2000::N2km_NodeOnly,25);
-  NMEA2000.EnableForward(forwardNMEA2000);
-  NMEA2000.ExtendTransmitMessages(TransmitMessages);
-  NMEA2000.Open();
-
+  this->pNMEA2000 = pNMEA2000;
   NMEA0183_3.Begin(gps,3, 4800);
 }
 
@@ -88,9 +77,9 @@ NMEA0183Handler::NMEA0183Handler(Stream* gps, Stream* forward, Stream* debugStre
  * B&G Triton requires a PGN129285 message around every 10 seconds otherwise display of the destinationID is cleared.
  * Depending on how fast an updated route is constructed we are sending the same or updated route.
  */
-void NMEA0183Handler::handleLoop() {
+void NMEA0183GPSGateway::handleLoop() {
 
-  NMEA2000.ParseMessages();
+  pNMEA2000->ParseMessages();
 
   tNMEA0183Msg NMEA0183Msg;  
   while (NMEA0183_3.GetMessage(NMEA0183Msg)) {
@@ -109,11 +98,11 @@ void NMEA0183Handler::handleLoop() {
  * Category: Navigation
  * This PGN provides the magnitude of position error perpendicular to the desired course.
  */
-void NMEA0183Handler::sendPGN129283(const tRMB &rmb) {
+void NMEA0183GPSGateway::sendPGN129283(const tRMB &rmb) {
 
   tN2kMsg N2kMsg;
   SetN2kXTE(N2kMsg,1,N2kxtem_Autonomous, false, rmb.xte);
-  NMEA2000.SendMsg(N2kMsg);
+  pNMEA2000->SendMsg(N2kMsg);
 }
 
 /*
@@ -127,7 +116,7 @@ void NMEA0183Handler::sendPGN129283(const tRMB &rmb) {
  * It always takes the 2nd waypoint from PGN129285 as DestinationWaypoint.
  * Not sure if that is compliant with NMEA2000 or B&G Trition specific.
  */
-void NMEA0183Handler::sendPGN129284(const tRMB &rmb) {
+void NMEA0183GPSGateway::sendPGN129284(const tRMB &rmb) {
   
       tN2kMsg N2kMsg;
 
@@ -147,7 +136,7 @@ void NMEA0183Handler::sendPGN129284(const tRMB &rmb) {
       bool PerpendicularCrossed = false;
       SetN2kNavigationInfo(N2kMsg,1,rmb.dtw,N2khr_magnetic,PerpendicularCrossed,ArrivalCircleEntered,N2kdct_RhumbLine,etaTime,etaDays,
                           bod.magBearing,Mbtw,originID,destinationID,rmb.latitude,rmb.longitude,rmb.vmg);
-      NMEA2000.SendMsg(N2kMsg);
+      pNMEA2000->SendMsg(N2kMsg);
     if (debugStream!=0) {
       debugStream->print("129284: originID="); debugStream->print(bod.originID.c_str());debugStream->print(",");debugStream->println(originID);
       debugStream->print("129284: destinationID="); debugStream->print(bod.destID.c_str());debugStream->print(",");debugStream->println(destinationID);
@@ -169,7 +158,7 @@ void NMEA0183Handler::sendPGN129284(const tRMB &rmb) {
  * Send the active route with all waypoints from the origin of the current leg and onwards.
  * So the waypoint that corresponds with the originID from the BOD message should be the 1st. The destinationID from the BOD message should be the 2nd. Etc.
  */
-void NMEA0183Handler::sendPGN129285(tRoute &route) {
+void NMEA0183GPSGateway::sendPGN129285(tRoute &route) {
   
   tN2kMsg N2kMsg;
   int i=0;
@@ -187,7 +176,7 @@ void NMEA0183Handler::sendPGN129285(tRoute &route) {
       }
       if (!AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude)) {
         //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
-        NMEA2000.SendMsg(N2kMsg); 
+        pNMEA2000->SendMsg(N2kMsg); 
         N2kMsg.Clear();
         SetN2kPGN129285(N2kMsg,i, 1, route.routeID, false, false, "Unknown");
         //TODO: Check for the result of the Append, should not fail due to message size. Perhaps some other reason?
@@ -199,11 +188,11 @@ void NMEA0183Handler::sendPGN129285(tRoute &route) {
     }
     i++;
   }
-  NMEA2000.SendMsg(N2kMsg);       
+  pNMEA2000->SendMsg(N2kMsg);       
 }
 
 // NMEA0183 message Handler functions
-void NMEA0183Handler::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
 
   tRMC rmc;
   if (NMEA0183ParseRMC_nc(NMEA0183Msg,rmc) && rmc.status == 'A') {
@@ -211,10 +200,10 @@ void NMEA0183Handler::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
     double MCOG = toMagnetic(rmc.trueCOG,rmc.variation);
     //PGN129026
     SetN2kCOGSOGRapid(N2kMsg,1,N2khr_magnetic,MCOG,rmc.SOG); 
-    NMEA2000.SendMsg(N2kMsg);
+    pNMEA2000->SendMsg(N2kMsg);
     //PGN129025
     SetN2kLatLonRapid(N2kMsg,rmc.latitude,rmc.longitude);
-    NMEA2000.SendMsg(N2kMsg);
+    pNMEA2000->SendMsg(N2kMsg);
     Latitude = rmc.latitude;
     Longitude = rmc.longitude;
     DaysSince1970 = rmc.daysSince1970;
@@ -236,7 +225,7 @@ void NMEA0183Handler::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
  * Receive NMEA0183 RMB message (Recommended Navigation Data for GPS).
  * Contains enough information to send a NMEA2000 PGN129283 (XTE) message and NMEA2000 PGN129284 message.
  */
-void NMEA0183Handler::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
 
   tRMB rmb;
   if (NMEA0183ParseRMB_nc(NMEA0183Msg, rmb)  && rmb.status == 'A') {
@@ -256,7 +245,7 @@ void NMEA0183Handler::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
   } else if (debugStream!=0) { debugStream->println("Failed to parse RMB"); }
 }
 
-void NMEA0183Handler::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
 
   tGGA gga;
   if (NMEA0183ParseGGA_nc(NMEA0183Msg,gga) && gga.GPSQualityIndicator > 0) {
@@ -266,7 +255,7 @@ void NMEA0183Handler::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
               N2kGNSSt_GPS,GNSMethofNMEA0183ToN2k(gga.GPSQualityIndicator),gga.satelliteCount,gga.HDOP,0,
               gga.geoidalSeparation,1,N2kGNSSt_GPS,gga.DGPSReferenceStationID,gga.DGPSAge
               );
-    NMEA2000.SendMsg(N2kMsg); 
+    pNMEA2000->SendMsg(N2kMsg); 
     Latitude = gga.latitude;
     Longitude = gga.longitude;
 
@@ -286,14 +275,14 @@ void NMEA0183Handler::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
   } else if (debugStream!=0) { debugStream->println("Failed to parse GGA"); }
 }
 
-void NMEA0183Handler::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
 
   tGLL gll;
   if (NMEA0183ParseGLL_nc(NMEA0183Msg,gll) && gll.status == 'A') {
     tN2kMsg N2kMsg;
     //PGN129025
     SetN2kLatLonRapid(N2kMsg, gll.latitude, gll.longitude);
-    NMEA2000.SendMsg(N2kMsg);
+    pNMEA2000->SendMsg(N2kMsg);
     Latitude = gll.latitude;
     Longitude = gll.longitude;
 
@@ -306,30 +295,14 @@ void NMEA0183Handler::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
   } else if (debugStream!=0) { debugStream->println("Failed to parse GLL"); }
 }
 
-void NMEA0183Handler::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
-
-  double TrueHeading;
-  if (NMEA0183ParseHDT_nc(NMEA0183Msg,TrueHeading)) {
-    tN2kMsg N2kMsg;
-    // Stupid Raymarine can not use true heading
-    double MHeading = toMagnetic(TrueHeading,Variation);
-    SetN2kMagneticHeading(N2kMsg,1,MHeading,0,Variation);
-  //      SetN2kTrueHeading(N2kMsg,1,TrueHeading);
-    NMEA2000.SendMsg(N2kMsg);
-    if (debugStream!=0) {
-      debugStream->print("True heading="); debugStream->println(TrueHeading);
-    }
-  } else if (debugStream!=0) { debugStream->println("Failed to parse HDT"); }
-}
-
-void NMEA0183Handler::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
  double MagneticCOG, COG, SOG;
   
   if (NMEA0183ParseVTG_nc(NMEA0183Msg,COG,MagneticCOG,SOG)) {
     Variation=COG-MagneticCOG; // Save variation for Magnetic heading
     tN2kMsg N2kMsg;
     SetN2kCOGSOGRapid(N2kMsg,1,N2khr_true,COG,SOG);
-    NMEA2000.SendMsg(N2kMsg);
+    pNMEA2000->SendMsg(N2kMsg);
     if (debugStream!=0) {
       debugStream->print("COG="); debugStream->println(COG);
     }
@@ -340,7 +313,7 @@ void NMEA0183Handler::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
  * Receive NMEA0183 BOD message (Bearing Origin to Destination) and store it for later use when the RMB message is received.
  * Does not contain enough information itself to send a single NMEA2000 message.
  */
-void NMEA0183Handler::HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (NMEA0183ParseBOD_nc(NMEA0183Msg,bod)) {
     if (debugStream!=0) {
@@ -360,7 +333,7 @@ void NMEA0183Handler::HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
  * For this we also need previously send WPL, messages. A single WPL message is sent per NMEA0183 message cycle (RMC, RMB, GGA, WPL) followed 
  * by the RTE message(s) in the next cycle. So it can take a while for long routes before alle waypoints are received and finally the RTE messages.
  */
-void NMEA0183Handler::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
   tRTE rte;
   if (NMEA0183ParseRTE_nc(NMEA0183Msg,rte)) {
@@ -406,7 +379,7 @@ void NMEA0183Handler::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
  * before alle waypoints are received.
  * Does not contain enough information itself to send a single NMEA2000 message.
  */
-void NMEA0183Handler::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   
   tWPL wpl;
   if (NMEA0183ParseWPL_nc(NMEA0183Msg,wpl)) {
@@ -421,7 +394,7 @@ void NMEA0183Handler::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   } else if (debugStream!=0) { debugStream->println("Failed to parse WPL"); }
 }
 
-void NMEA0183Handler::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
+void NMEA0183GPSGateway::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (NMEA0183Msg.IsMessageCode("GGA")) {
     HandleGGA(NMEA0183Msg);
@@ -437,8 +410,6 @@ void NMEA0183Handler::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
     HandleBOD(NMEA0183Msg);
   } else if (NMEA0183Msg.IsMessageCode("VTG")) {
     HandleVTG(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("HDT")) {
-    HandleHDT(NMEA0183Msg);
   } else if (NMEA0183Msg.IsMessageCode("RTE")) {
     HandleRTE(NMEA0183Msg);
   }

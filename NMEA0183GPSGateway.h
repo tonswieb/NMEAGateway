@@ -1,5 +1,5 @@
 /* 
-NMEA0183Handlers.h
+NMEA0183GPSGateway.h
 
 2015 Copyright (c) Kave Oy, www.kave.fi  All right reserved.
 
@@ -13,8 +13,8 @@ Author: Timo Lappalainen
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 */
  
-#ifndef _NMEA0183Handlers_H_
-#define _NMEA0183Handlers_H_
+#ifndef _NMEA0183GPSGateway_H_
+#define _NMEA0183GPSGateway_H_
 
 #include <StandardCplusplus.h>
 #include <list>
@@ -46,10 +46,7 @@ struct tRoute {
     
 };
 
-// List here messages your device will transmit.
-const unsigned long TransmitMessages[] PROGMEM={129283L,129284L,129285L,126992L,129025L,129026L,129029L,0};
-
-class NMEA0183Handler {
+class NMEA0183GPSGateway {
 
   private:  
     unsigned long DaysSince1970;   // Days since 1970-01-01
@@ -59,6 +56,7 @@ class NMEA0183Handler {
     tRoute routeComplete;
     tRoute routeInProgress;
     tNMEA0183 NMEA0183_3;
+    tNMEA2000* pNMEA2000;
     Stream* debugStream=0;
 
     void sendPGN129283(const tRMB &rmb);
@@ -68,7 +66,6 @@ class NMEA0183Handler {
     void HandleRMB(const tNMEA0183Msg &NMEA0183Msg);
     void HandleRMC(const tNMEA0183Msg &NMEA0183Msg);
     void HandleGGA(const tNMEA0183Msg &NMEA0183Msg);
-    void HandleHDT(const tNMEA0183Msg &NMEA0183Msg);
     void HandleVTG(const tNMEA0183Msg &NMEA0183Msg);
     void HandleBOD(const tNMEA0183Msg &NMEA0183Msg);
     void HandleRTE(const tNMEA0183Msg &NMEA0183Msg);
@@ -76,7 +73,7 @@ class NMEA0183Handler {
     void HandleGLL(const tNMEA0183Msg &NMEA0183Msg);
   
   public:
-    NMEA0183Handler(Stream* gps, Stream* forward, Stream* debugStream = 0, bool forwardNMEA2000 = false);
+    NMEA0183GPSGateway(tNMEA2000* pNMEA2000, Stream* gps, Stream* debugStream = 0);
     void handleLoop();
 };
 
