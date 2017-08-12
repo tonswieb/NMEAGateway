@@ -1,17 +1,11 @@
 /*
- Demo: NMEA0183 library. NMEA0183 -> NMEA2000
-   Reads messages from NMEA0183 and forwards them to the N2k bus
-   Also forwards all NMEA2000 bus messages to the PC (Serial)
 
- This example reads NMEA0183 messages from one serial port. It is possible
- to add more serial ports for having NMEA0183 combiner functionality.
+NMEA2000 Gateway.
+Based on the NMEA0183ToN2k example of Timo Lappalainen.
 
- The messages, which will be handled has been defined on NMEA0183Handlers.cpp
- on NMEA0183Handlers variable initialization. So this does not automatically
- handle all NMEA0183 messages. If there is no handler for some message you need,
- you have to write handler for it and add it to the NMEA0183Handlers variable
- initialization. If you write new handlers, please after testing send them to me,
- so I can add them for others use.
+Reads NMEA0183 messages and forwards them tho the N2k bus.
+Reads compass heading and forwards it to the N2k bus.
+
 */
 
 #define USE_MCP_CAN_CLOCK_SET 8

@@ -3,7 +3,7 @@ NMEA0183Gateway.cpp
 
 2015 Copyright (c) Kave Oy, www.kave.fi  All right reserved.
 
-Author: Timo Lappalainen
+Author: Timo Lappalainen, Ton Swieb
 
   This library is free software; you can redistribute it and/or
   modify it as you like.
