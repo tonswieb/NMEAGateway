@@ -195,7 +195,7 @@ void NMEA0183Gateway::sendPGN129285(tRoute &route) {
 void NMEA0183Gateway::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
 
   tRMC rmc;
-  if (NMEA0183ParseRMC_nc(NMEA0183Msg,rmc) && rmc.status == 'A') {
+  if (NMEA0183ParseRMC(NMEA0183Msg,rmc) && rmc.status == 'A') {
     tN2kMsg N2kMsg;
     double MCOG = toMagnetic(rmc.trueCOG,rmc.variation);
     //PGN129026
@@ -228,7 +228,7 @@ void NMEA0183Gateway::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
 
   tRMB rmb;
-  if (NMEA0183ParseRMB_nc(NMEA0183Msg, rmb)  && rmb.status == 'A') {
+  if (NMEA0183ParseRMB(NMEA0183Msg, rmb)  && rmb.status == 'A') {
     sendPGN129283(rmb);
     sendPGN129284(rmb);
     if (debugStream!=0) {
@@ -248,7 +248,7 @@ void NMEA0183Gateway::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
 
   tGGA gga;
-  if (NMEA0183ParseGGA_nc(NMEA0183Msg,gga) && gga.GPSQualityIndicator > 0) {
+  if (NMEA0183ParseGGA(NMEA0183Msg,gga) && gga.GPSQualityIndicator > 0) {
     tN2kMsg N2kMsg;
     //129029
     SetN2kGNSS(N2kMsg,1,DaysSince1970,gga.GPSTime,gga.latitude,gga.longitude,gga.altitude,
@@ -278,7 +278,7 @@ void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
 
   tGLL gll;
-  if (NMEA0183ParseGLL_nc(NMEA0183Msg,gll) && gll.status == 'A') {
+  if (NMEA0183ParseGLL(NMEA0183Msg,gll) && gll.status == 'A') {
     tN2kMsg N2kMsg;
     //PGN129025
     SetN2kLatLonRapid(N2kMsg, gll.latitude, gll.longitude);
@@ -298,7 +298,7 @@ void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
 
   double TrueHeading;
-  if (NMEA0183ParseHDT_nc(NMEA0183Msg,TrueHeading)) {
+  if (NMEA0183ParseHDT(NMEA0183Msg,TrueHeading)) {
     tN2kMsg N2kMsg;
     double MHeading = toMagnetic(TrueHeading,Variation);
     SetN2kMagneticHeading(N2kMsg,1,MHeading,0,Variation);
@@ -312,7 +312,7 @@ void NMEA0183Gateway::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
  double MagneticCOG, COG, SOG;
   
-  if (NMEA0183ParseVTG_nc(NMEA0183Msg,COG,MagneticCOG,SOG)) {
+  if (NMEA0183ParseVTG(NMEA0183Msg,COG,MagneticCOG,SOG)) {
     Variation=COG-MagneticCOG; // Save variation for Magnetic heading
     tN2kMsg N2kMsg;
     SetN2kCOGSOGRapid(N2kMsg,1,N2khr_true,COG,SOG);
@@ -329,7 +329,7 @@ void NMEA0183Gateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
  */
 void NMEA0183Gateway::HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
-  if (NMEA0183ParseBOD_nc(NMEA0183Msg,bod)) {
+  if (NMEA0183ParseBOD(NMEA0183Msg,bod)) {
     if (debugStream!=0) {
       debugStream->print("BOD: True heading="); debugStream->println(bod.trueBearing);
       debugStream->print("BOD: Magnetic heading="); debugStream->println(bod.magBearing);
@@ -350,7 +350,7 @@ void NMEA0183Gateway::HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
   tRTE rte;
-  if (NMEA0183ParseRTE_nc(NMEA0183Msg,rte)) {
+  if (NMEA0183ParseRTE(NMEA0183Msg,rte)) {
 
     routeInProgress.routeID = rte.routeID;
 
@@ -396,7 +396,7 @@ void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   
   tWPL wpl;
-  if (NMEA0183ParseWPL_nc(NMEA0183Msg,wpl)) {
+  if (NMEA0183ParseWPL(NMEA0183Msg,wpl)) {
     routeInProgress.wpMap[wpl.name] = wpl;
     if (debugStream!=0) {
       debugStream->print("WPL: Time="); debugStream->println(millis());
