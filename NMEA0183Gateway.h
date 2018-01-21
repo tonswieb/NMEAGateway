@@ -30,6 +30,12 @@ Author: Timo Lappalainen, Ton Swieb
 #include <Time.h>
 #include <MemoryFree.h>
 
+#define DEBUG_LEVEL_TRACE 4
+#define DEBUG_LEVEL_DEBUG 3
+#define DEBUG_LEVEL_INFO 2
+#define DEBUG_LEVEL_WARN 1
+#define DEBUG_LEVEL_ERROR 0
+
 /**
  * Defines the information needed to send a route from NMEA 0183 to NMEA 2000.
  * The last complete received route, for periodic sending.
@@ -58,6 +64,7 @@ class NMEA0183Gateway {
     tNMEA0183 NMEA0183;
     tNMEA2000* pNMEA2000;
     Stream* debugStream=0;
+    int debugLevel;
 
     void sendPGN129283(const tRMB &rmb);
     void sendPGN129284(const tRMB &rmb);
@@ -74,7 +81,7 @@ class NMEA0183Gateway {
     void HandleGLL(const tNMEA0183Msg &NMEA0183Msg);
   
   public:
-    NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream* debugStream = 0);
+    NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream* debugStream = 0, int debugLevel = DEBUG_LEVEL_INFO);
     void handleLoop();
 };
 
