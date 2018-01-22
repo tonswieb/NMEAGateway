@@ -47,7 +47,8 @@ struct tRoute {
   //An ordered list of waypointnames as received from RTE messages.
   std::list<std::string> wpList;
   //A map of waypoints received from WPL messages.
-  std::map<std::string,tWPL> wpMap;  
+  std::map<std::string,tWPL> wpMap;
+  boolean wpListInProgress;
   unsigned int routeID;
     
 };
@@ -59,13 +60,16 @@ class NMEA0183Gateway {
     double Variation, Latitude, Longitude;
     //NMEA0183-BOD (Bearing Origin to Destination). Does not conatin enough information to send a NMEA200 message, but contains some elements required for a NMEA2000 message.
     tBOD bod;
-    tRoute routeComplete;
-    tRoute routeInProgress;
+    tRoute route;
     tNMEA0183 NMEA0183;
     tNMEA2000* pNMEA2000;
     Stream* debugStream=0;
     int debugLevel;
     int memoryMin;
+
+    void removeWaypointsUpToOriginCurrentLeg(tRoute &route, const std::string originID);
+    void removeUnusedWaypointsFromRoute(tRoute &route);
+
 
     void sendPGN129283(const tRMB &rmb);
     void sendPGN129284(const tRMB &rmb);
