@@ -65,6 +65,7 @@ class NMEA0183Gateway {
     tNMEA2000* pNMEA2000;
     Stream* debugStream=0;
     int debugLevel;
+    int memoryMin;
 
     void sendPGN129283(const tRMB &rmb);
     void sendPGN129284(const tRMB &rmb);

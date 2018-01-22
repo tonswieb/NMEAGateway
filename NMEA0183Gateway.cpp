@@ -70,9 +70,10 @@ NMEA0183Gateway::NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream*
   this->debugStream = debugStream;
   this->debugLevel = debugLevel;
   this->pNMEA2000 = pNMEA2000;
+  memoryMin = freeMemory();
   if (debugStream !=0 && debugLevel >= DEBUG_LEVEL_INFO) {
     debugStream->print("Initializing NMEA0183 communication at ");debugStream->print(9600);debugStream->println(" baud. Make sure the NMEA device uses the same baudrate.");
-    debugStream->print("Free memory before initializing = "); debugStream->println(freeMemory());
+    debugStream->print("Memory Min: "); debugStream->println(freeMemory());
   }
   NMEA0183.Begin(nmea0183,3, 9600);
 }
@@ -88,13 +89,19 @@ void NMEA0183Gateway::handleLoop() {
 
   tNMEA0183Msg NMEA0183Msg;  
   while (NMEA0183.GetMessage(NMEA0183Msg)) {
-    HandleNMEA0183Msg(NMEA0183Msg);
+    HandleNMEA0183Msg(NMEA0183Msg);  
+    if (freeMemory() < memoryMin) {
+        memoryMin = freeMemory();
+    }
   }
   
   static unsigned long timeUpdated=millis();
   if (timeUpdated+5000 < millis()) {
     timeUpdated=millis();
     sendPGN129285(routeComplete);
+    if (freeMemory() < memoryMin) {
+        memoryMin = freeMemory();
+    }
   }
 }
 
@@ -414,10 +421,11 @@ void NMEA0183Gateway::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_DEBUG) {
-      debugStream->print("Free memory before handling="); debugStream->println(freeMemory());
+      debugStream->print("Free memory before:"); debugStream->println(freeMemory());
   }
   if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_INFO) {
-      debugStream->print("Handling NMEA0183 message "); debugStream->println(NMEA0183Msg.MessageCode());
+      debugStream->print("Memory min: "); debugStream->print(memoryMin);
+      debugStream->print(" Handling NMEA0183 message "); debugStream->println(NMEA0183Msg.MessageCode());
   }
 
   if (NMEA0183Msg.IsMessageCode("GGA")) {
