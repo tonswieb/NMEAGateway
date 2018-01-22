@@ -62,6 +62,9 @@ void removeWaypointsUpToOriginCurrentLeg(tRoute &route, const std::string origin
   }
   if (originFound) {
     route.wpList.erase(route.wpList.begin(),it);
+  } else if (debugStream !=0 && debugLevel >= DEBUG_LEVEL_WARN) {
+    //Should normally not occur the BOD and RTE's are send in the same NMEA0183 cycle so thesee should be in sync.
+    debugStream->print("WARN: The origin of the leg not found in the waypoint list of the route.Memory Min: ");
   }
 }
 
