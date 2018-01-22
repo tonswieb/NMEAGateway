@@ -266,7 +266,7 @@ void NMEA0183Gateway::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
       debugStream->print("TRACE: RMC: Variation="); debugStream->println(rmc.variation);
     }
   } else if (debugStream!=0 && rmc.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println("WARN : RMC is Void");
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR ) { debugStream->println("ERROR : Failed to parse RMC"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR ) { debugStream->println("ERROR: Failed to parse RMC"); }
 }
 
 /**
@@ -290,7 +290,7 @@ void NMEA0183Gateway::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
       debugStream->print("TRACE: RMB: Longitude="); debugStream->println(rmb.longitude,5);
     }
   } else if (debugStream!=0 && rmb.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println("WARN : RMB is Void");
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR : Failed to parse RMB"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR: Failed to parse RMB"); }
 }
 
 void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
@@ -320,7 +320,7 @@ void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
       debugStream->print("TRACE: GGA: DGPSReferenceStationID="); debugStream->println(gga.DGPSReferenceStationID);
     }
   } else if (debugStream!=0 && gga.GPSQualityIndicator == 0 && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println("WARN : GGA invalid GPS fix.");
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR : Failed to parse GGA"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR: Failed to parse GGA"); }
 }
 
 void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
@@ -340,7 +340,7 @@ void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
       debugStream->print("TRACE: GLL: Longitude="); debugStream->println(gll.longitude,5);
     }
   } else if (debugStream!=0 && gll.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println("WARN : GLL is Void");
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR : Failed to parse GLL"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR: Failed to parse GLL"); }
 }
 
 void NMEA0183Gateway::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
