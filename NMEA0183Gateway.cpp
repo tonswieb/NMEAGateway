@@ -64,7 +64,7 @@ void NMEA0183Gateway::removeWaypointsUpToOriginCurrentLeg(tRoute &route, const s
     route.wpList.erase(route.wpList.begin(),it);
   } else if (debugStream !=0 && debugLevel >= DEBUG_LEVEL_WARN) {
     //Should normally not occur the BOD and RTE's are send in the same NMEA0183 cycle so thesee should be in sync.
-    debugStream->println("WARN : The origin of the leg not found in the waypoint list of the route.");
+    debugStream->println(F("WARN : The origin of the leg not found in the waypoint list of the route."));
   }
 }
 
@@ -86,7 +86,7 @@ void NMEA0183Gateway::removeUnusedWaypointsFromRoute(tRoute &route) {
     }
     if (!mapElementFoundInWpList) {
       if (debugStream !=0 && debugLevel >= DEBUG_LEVEL_INFO) {
-        debugStream->print("INFO : Removing WPL which is no longer in route: ");debugStream->println(it->first.c_str());
+        debugStream->print(F("INFO : Removing WPL which is no longer in route: "));debugStream->println(it->first.c_str());
       }
       route.wpMap.erase(it);
     }
@@ -103,8 +103,8 @@ NMEA0183Gateway::NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream*
   this->pNMEA2000 = pNMEA2000;
   memoryMin = freeMemory();
   if (debugStream !=0 && debugLevel >= DEBUG_LEVEL_INFO) {
-    debugStream->print("INFO : Initializing NMEA0183 communication at ");debugStream->print(9600);debugStream->println(" baud. Make sure the NMEA device uses the same baudrate.");
-    debugStream->print(" Memory Min: "); debugStream->println(freeMemory());
+    debugStream->print(F("INFO : Initializing NMEA0183 communication at "));debugStream->print(9600);debugStream->println(F(" baud. Make sure the NMEA device uses the same baudrate."));
+    debugStream->print(F(" Memory Min: ")); debugStream->println(memoryMin);
   }
   NMEA0183.Begin(nmea0183,3, 9600);
 }
@@ -132,7 +132,7 @@ void NMEA0183Gateway::handleLoop() {
     if (!route.wpListInProgress) {
       sendPGN129285(route);    
     } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_INFO) {
-      debugStream->println("INFO : Skip sending PGN129285, because waypoint list for route is being rebuild.");
+      debugStream->println(F("INFO : Skip sending PGN129285, because waypoint list for route is being rebuild."));
     }
     if (freeMemory() < memoryMin) {
         memoryMin = freeMemory();
@@ -185,15 +185,15 @@ void NMEA0183Gateway::sendPGN129284(const tRMB &rmb) {
                           bod.magBearing,Mbtw,originID,destinationID,rmb.latitude,rmb.longitude,rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: 129284: originID="); debugStream->print(bod.originID.c_str());debugStream->print(",");debugStream->println(originID);
-      debugStream->print("TRACE: 129284: destinationID="); debugStream->print(bod.destID.c_str());debugStream->print(",");debugStream->println(destinationID);
-      debugStream->print("TRACE: 129284: latitude="); debugStream->println(rmb.latitude,5);
-      debugStream->print("TRACE: 129284: longitude="); debugStream->println(rmb.longitude,5);
-      debugStream->print("TRACE: 129284: ArrivalCircleEntered="); debugStream->println(ArrivalCircleEntered);
-      debugStream->print("TRACE: 129284: VMG="); debugStream->println(rmb.vmg);
-      debugStream->print("TRACE: 129284: DTW="); debugStream->println(rmb.dtw);
-      debugStream->print("TRACE: 129284: BTW (Current to Destination="); debugStream->println(Mbtw);
-      debugStream->print("TRACE: 129284: BTW (Orign to Desitination)="); debugStream->println(bod.magBearing);
+      debugStream->print(F("TRACE: 129284: originID=")); debugStream->print(bod.originID.c_str());debugStream->print(F(","));debugStream->println(originID);
+      debugStream->print(F("TRACE: 129284: destinationID=")); debugStream->print(bod.destID.c_str());debugStream->print(F(","));debugStream->println(destinationID);
+      debugStream->print(F("TRACE: 129284: latitude=")); debugStream->println(rmb.latitude,5);
+      debugStream->print(F("TRACE: 129284: longitude=")); debugStream->println(rmb.longitude,5);
+      debugStream->print(F("TRACE: 129284: ArrivalCircleEntered=")); debugStream->println(ArrivalCircleEntered);
+      debugStream->print(F("TRACE: 129284: VMG=")); debugStream->println(rmb.vmg);
+      debugStream->print(F("TRACE: 129284: DTW=")); debugStream->println(rmb.dtw);
+      debugStream->print(F("TRACE: 129284: BTW (Current to Destination=")); debugStream->println(Mbtw);
+      debugStream->print(F("TRACE: 129284: BTW (Orign to Desitination)=")); debugStream->println(bod.magBearing);
     }
 }
 
@@ -217,10 +217,10 @@ void NMEA0183Gateway::sendPGN129285(tRoute &route) {
     tWPL wpl = route.wpMap[currWp];
     if (wpl.name == currWp) {
       if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-        debugStream->print("TRACE: 129285:");
-        debugStream->print(wpl.name.c_str());debugStream->print(",");
-        debugStream->print(wpl.latitude);debugStream->print(",");
-        debugStream->print(wpl.longitude);debugStream->print("\n");
+        debugStream->print(F("TRACE: 129285:"));
+        debugStream->print(wpl.name.c_str());debugStream->print(F(","));
+        debugStream->print(wpl.latitude);debugStream->print(F(","));
+        debugStream->print(wpl.longitude);debugStream->print(F("\n"));
       }
       if (!AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude)) {
         //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
@@ -231,8 +231,8 @@ void NMEA0183Gateway::sendPGN129285(tRoute &route) {
         AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude);
       }
     } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE)  {
-        debugStream->print("TRACE: 129285: Skipping ");
-        debugStream->print(currWp.c_str());debugStream->print("\n");
+        debugStream->print(F("TRACE: 129285: Skipping "));
+        debugStream->print(currWp.c_str());debugStream->print(F("\n"));
     }
     i++;
   }
@@ -257,16 +257,16 @@ void NMEA0183Gateway::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
     DaysSince1970 = rmc.daysSince1970;
     Variation = rmc.variation;
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: RMC: GPSTime="); debugStream->println(rmc.GPSTime);
-      debugStream->print("TRACE: RMC: Latitude="); debugStream->println(rmc.latitude,5);
-      debugStream->print("TRACE: RMC: Longitude="); debugStream->println(rmc.longitude,5);
-      debugStream->print("TRACE: RMC: COG="); debugStream->println(rmc.trueCOG);
-      debugStream->print("TRACE: RMC: SOG="); debugStream->println(rmc.SOG);
-      debugStream->print("TRACE: RMC: DaysSince1970="); debugStream->println(rmc.daysSince1970);
-      debugStream->print("TRACE: RMC: Variation="); debugStream->println(rmc.variation);
+      debugStream->print(F("TRACE: RMC: GPSTime=")); debugStream->println(rmc.GPSTime);
+      debugStream->print(F("TRACE: RMC: Latitude=")); debugStream->println(rmc.latitude,5);
+      debugStream->print(F("TRACE: RMC: Longitude=")); debugStream->println(rmc.longitude,5);
+      debugStream->print(F("TRACE: RMC: COG=")); debugStream->println(rmc.trueCOG);
+      debugStream->print(F("TRACE: RMC: SOG=")); debugStream->println(rmc.SOG);
+      debugStream->print(F("TRACE: RMC: DaysSince1970=")); debugStream->println(rmc.daysSince1970);
+      debugStream->print(F("TRACE: RMC: Variation=")); debugStream->println(rmc.variation);
     }
-  } else if (debugStream!=0 && rmc.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println("WARN : RMC is Void");
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR ) { debugStream->println("ERROR: Failed to parse RMC"); }
+  } else if (debugStream!=0 && rmc.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println(F("WARN : RMC is Void"));
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR ) { debugStream->println(F("ERROR: Failed to parse RMC")); }
 }
 
 /**
@@ -280,17 +280,17 @@ void NMEA0183Gateway::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
     sendPGN129283(rmb);
     sendPGN129284(rmb);
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: RMB: XTE="); debugStream->println(rmb.xte);
-      debugStream->print("TRACE: RMB: DTW="); debugStream->println(rmb.dtw);
-      debugStream->print("TRACE: RMB: BTW="); debugStream->println(rmb.btw);
-      debugStream->print("TRACE: RMB: VMG="); debugStream->println(rmb.vmg);
-      debugStream->print("TRACE: RMB: OriginID="); debugStream->println(rmb.originID.c_str());
-      debugStream->print("TRACE: RMB: DestinationID="); debugStream->println(rmb.destID.c_str());
-      debugStream->print("TRACE: RMB: Latittude="); debugStream->println(rmb.latitude,5);
-      debugStream->print("TRACE: RMB: Longitude="); debugStream->println(rmb.longitude,5);
+      debugStream->print(F("TRACE: RMB: XTE=")); debugStream->println(rmb.xte);
+      debugStream->print(F("TRACE: RMB: DTW=")); debugStream->println(rmb.dtw);
+      debugStream->print(F("TRACE: RMB: BTW=")); debugStream->println(rmb.btw);
+      debugStream->print(F("TRACE: RMB: VMG=")); debugStream->println(rmb.vmg);
+      debugStream->print(F("TRACE: RMB: OriginID=")); debugStream->println(rmb.originID.c_str());
+      debugStream->print(F("TRACE: RMB: DestinationID=")); debugStream->println(rmb.destID.c_str());
+      debugStream->print(F("TRACE: RMB: Latittude=")); debugStream->println(rmb.latitude,5);
+      debugStream->print(F("TRACE: RMB: Longitude=")); debugStream->println(rmb.longitude,5);
     }
-  } else if (debugStream!=0 && rmb.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println("WARN : RMB is Void");
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR: Failed to parse RMB"); }
+  } else if (debugStream!=0 && rmb.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println(F("WARN : RMB is Void"));
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("ERROR: Failed to parse RMB")); }
 }
 
 void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
@@ -308,19 +308,19 @@ void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
     Longitude = gga.longitude;
 
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: GGA: Time="); debugStream->println(gga.GPSTime);
-      debugStream->print("TRACE: GGA: Latitude="); debugStream->println(gga.latitude,5);
-      debugStream->print("TRACE: GGA: Longitude="); debugStream->println(gga.longitude,5);
-      debugStream->print("TRACE: GGA: Altitude="); debugStream->println(gga.altitude,1);
-      debugStream->print("TRACE: GGA: GPSQualityIndicator="); debugStream->println(gga.GPSQualityIndicator);
-      debugStream->print("TRACE: GGA: SatelliteCount="); debugStream->println(gga.satelliteCount);
-      debugStream->print("TRACE: GGA: HDOP="); debugStream->println(gga.HDOP);
-      debugStream->print("TRACE: GGA: GeoidalSeparation="); debugStream->println(gga.geoidalSeparation);
-      debugStream->print("TRACE: GGA: DGPSAge="); debugStream->println(gga.DGPSAge);
-      debugStream->print("TRACE: GGA: DGPSReferenceStationID="); debugStream->println(gga.DGPSReferenceStationID);
+      debugStream->print(F("TRACE: GGA: Time=")); debugStream->println(gga.GPSTime);
+      debugStream->print(F("TRACE: GGA: Latitude=")); debugStream->println(gga.latitude,5);
+      debugStream->print(F("TRACE: GGA: Longitude=")); debugStream->println(gga.longitude,5);
+      debugStream->print(F("TRACE: GGA: Altitude=")); debugStream->println(gga.altitude,1);
+      debugStream->print(F("TRACE: GGA: GPSQualityIndicator=")); debugStream->println(gga.GPSQualityIndicator);
+      debugStream->print(F("TRACE: GGA: SatelliteCount=")); debugStream->println(gga.satelliteCount);
+      debugStream->print(F("TRACE: GGA: HDOP=")); debugStream->println(gga.HDOP);
+      debugStream->print(F("TRACE: GGA: GeoidalSeparation=")); debugStream->println(gga.geoidalSeparation);
+      debugStream->print(F("TRACE: GGA: DGPSAge=")); debugStream->println(gga.DGPSAge);
+      debugStream->print(F("TRACE: GGA: DGPSReferenceStationID=")); debugStream->println(gga.DGPSReferenceStationID);
     }
-  } else if (debugStream!=0 && gga.GPSQualityIndicator == 0 && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println("WARN : GGA invalid GPS fix.");
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR: Failed to parse GGA"); }
+  } else if (debugStream!=0 && gga.GPSQualityIndicator == 0 && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println(F("WARN : GGA invalid GPS fix."));
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("ERROR: Failed to parse GGA")); }
 }
 
 void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
@@ -335,12 +335,12 @@ void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
     Longitude = gll.longitude;
 
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: GLL: Time="); debugStream->println(gll.GPSTime);
-      debugStream->print("TRACE: GLL: Latitude="); debugStream->println(gll.latitude,5);
-      debugStream->print("TRACE: GLL: Longitude="); debugStream->println(gll.longitude,5);
+      debugStream->print(F("TRACE: GLL: Time=")); debugStream->println(gll.GPSTime);
+      debugStream->print(F("TRACE: GLL: Latitude=")); debugStream->println(gll.latitude,5);
+      debugStream->print(F("TRACE: GLL: Longitude=")); debugStream->println(gll.longitude,5);
     }
-  } else if (debugStream!=0 && gll.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println("WARN : GLL is Void");
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("ERROR: Failed to parse GLL"); }
+  } else if (debugStream!=0 && gll.status == 'V' && debugLevel >= DEBUG_LEVEL_WARN) { debugStream->println(F("WARN : GLL is Void"));
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("ERROR: Failed to parse GLL")); }
 }
 
 void NMEA0183Gateway::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
@@ -352,9 +352,9 @@ void NMEA0183Gateway::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
     SetN2kMagneticHeading(N2kMsg,1,MHeading,0,Variation);
     pNMEA2000->SendMsg(N2kMsg);
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: True heading="); debugStream->println(TrueHeading);
+      debugStream->print(F("TRACE: True heading=")); debugStream->println(TrueHeading);
     }
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("Failed to parse HDT"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("Failed to parse HDT")); }
 }
 
 void NMEA0183Gateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
@@ -366,9 +366,9 @@ void NMEA0183Gateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
     SetN2kCOGSOGRapid(N2kMsg,1,N2khr_true,COG,SOG);
     pNMEA2000->SendMsg(N2kMsg);
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: COG="); debugStream->println(COG);
+      debugStream->print(F("TRACE: COG=")); debugStream->println(COG);
     }
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("Failed to parse VTG"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("Failed to parse VTG")); }
 }
 
 /**
@@ -379,12 +379,12 @@ void NMEA0183Gateway::HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (NMEA0183ParseBOD(NMEA0183Msg,bod)) {
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: BOD: True heading="); debugStream->println(bod.trueBearing);
-      debugStream->print("TRACE: BOD: Magnetic heading="); debugStream->println(bod.magBearing);
-      debugStream->print("TRACE: BOD: Origin ID="); debugStream->println(bod.originID.c_str());
-      debugStream->print("TRACE: BOD: Dest ID="); debugStream->println(bod.destID.c_str());
+      debugStream->print(F("TRACE: BOD: True heading=")); debugStream->println(bod.trueBearing);
+      debugStream->print(F("TRACE: BOD: Magnetic heading=")); debugStream->println(bod.magBearing);
+      debugStream->print(F("TRACE: BOD: Origin ID=")); debugStream->println(bod.originID.c_str());
+      debugStream->print(F("TRACE: BOD: Dest ID=")); debugStream->println(bod.destID.c_str());
     }
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("Failed to parse BOD"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("Failed to parse BOD")); }
 }
 
 /**
@@ -426,13 +426,13 @@ void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
     }
 
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: RTE: Time="); debugStream->println(millis());
-      debugStream->print("TRACE: RTE: Nr of sentences="); debugStream->println(rte.nrOfsentences);
-      debugStream->print("TRACE: RTE: Current sentence="); debugStream->println(rte.currSentence);
-      debugStream->print("TRACE: RTE: Type="); debugStream->println(rte.type);
-      debugStream->print("TRACE: RTE: Route ID="); debugStream->println(rte.routeID);
+      debugStream->print(F("TRACE: RTE: Time=")); debugStream->println(millis());
+      debugStream->print(F("TRACE: RTE: Nr of sentences=")); debugStream->println(rte.nrOfsentences);
+      debugStream->print(F("TRACE: RTE: Current sentence=")); debugStream->println(rte.currSentence);
+      debugStream->print(F("TRACE: RTE: Type=")); debugStream->println(rte.type);
+      debugStream->print(F("TRACE: RTE: Route ID=")); debugStream->println(rte.routeID);
     }
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("Failed to parse RTE"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("Failed to parse RTE")); }
 }
 
 /**
@@ -447,19 +447,19 @@ void NMEA0183Gateway::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   if (NMEA0183ParseWPL(NMEA0183Msg,wpl)) {
     route.wpMap[wpl.name] = wpl;
     if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE) {
-      debugStream->print("TRACE: WPL: Time="); debugStream->println(millis());
-      debugStream->print("TRACE: WPL: Name="); debugStream->println(route.wpMap[wpl.name].name.c_str());
-      debugStream->print("TRACE: WPL: Latitude="); debugStream->println(route.wpMap[wpl.name].latitude);
-      debugStream->print("TRACE: WPL: Longitude="); debugStream->println(route.wpMap[wpl.name].longitude);
+      debugStream->print(F("TRACE: WPL: Time=")); debugStream->println(millis());
+      debugStream->print(F("TRACE: WPL: Name=")); debugStream->println(route.wpMap[wpl.name].name.c_str());
+      debugStream->print(F("TRACE: WPL: Latitude=")); debugStream->println(route.wpMap[wpl.name].latitude);
+      debugStream->print(F("TRACE: WPL: Longitude=")); debugStream->println(route.wpMap[wpl.name].longitude);
     }
-  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println("Failed to parse WPL"); }
+  } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("Failed to parse WPL")); }
 }
 
 void NMEA0183Gateway::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_DEBUG) {
-      debugStream->print("DEBUG : Memory min: "); debugStream->print(memoryMin);
-      debugStream->print(" Handling NMEA0183 message "); debugStream->println(NMEA0183Msg.MessageCode());
+      debugStream->print(F("DEBUG : Memory min: ")); debugStream->print(memoryMin);
+      debugStream->print(F(" Handling NMEA0183 message ")); debugStream->println(NMEA0183Msg.MessageCode());
   }
 
   if (NMEA0183Msg.IsMessageCode("GGA")) {
