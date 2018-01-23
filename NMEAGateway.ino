@@ -33,7 +33,7 @@ void loop() {
 void setupNMEA2000Lib(tNMEA2000* pNMEA2000, Stream* forwardStream) {
   
   // List here messages your device will transmit.
-  unsigned long TransmitMessages[] PROGMEM={127250L,129283L,129284L,129285L,126992L,129025L,129026L,129029L,0};
+  unsigned const static long TransmitMessages[] PROGMEM={127250L,129283L,129284L,129285L,126992L,129025L,129026L,129029L,0};
   pNMEA2000->SetProductInformation("00000008",107,"NMEA0183 -> N2k -> PC","1.0.0.0 (2017-07-16)","1.0.0.0 (2017-07-16)" );
   pNMEA2000->SetDeviceInformation(8,130,25,2046);
   pNMEA2000->SetForwardStream(forwardStream);
