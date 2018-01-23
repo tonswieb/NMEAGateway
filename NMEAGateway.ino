@@ -18,7 +18,7 @@ CompassHeading * pCompassHeading;
 
 void setup() {
 
-  Serial.begin(115200);
+  Serial.begin(1000000);
   setupNMEA2000Lib(&NMEA2000, &Serial);
   pNmea0183Gateway = new NMEA0183Gateway(&NMEA2000, &Serial3, &Serial,DEBUG_LEVEL_INFO);
   pCompassHeading = new CompassHeading(&NMEA2000,&Serial);
