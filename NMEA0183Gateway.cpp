@@ -455,6 +455,16 @@ void NMEA0183Gateway::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   } else if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR) { debugStream->println(F("Failed to parse WPL")); }
 }
 
+/*
+ * NMEA0183Msg.IsMessageCode wrapper function using PROGMEM Strings to limited SRAM usage.
+ */
+boolean isMessageCode_P(const tNMEA0183Msg &NMEA0183Msg, const char* code) {
+  
+  char buffer[4];
+  strcpy_P(buffer, code); //Copy from PROGMEM to SRAM
+  return NMEA0183Msg.IsMessageCode(buffer);
+}
+
 void NMEA0183Gateway::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (debugStream!=0 && debugLevel >= DEBUG_LEVEL_DEBUG) {
@@ -462,23 +472,23 @@ void NMEA0183Gateway::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
       debugStream->print(F(" Handling NMEA0183 message ")); debugStream->println(NMEA0183Msg.MessageCode());
   }
 
-  if (NMEA0183Msg.IsMessageCode("GGA")) {
+  if (isMessageCode_P(NMEA0183Msg,PSTR("GGA"))) {
     HandleGGA(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("GGL")) {
+  } else if (isMessageCode_P(NMEA0183Msg,PSTR("GGL"))) {
     HandleGLL(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("RMB")) {
+  } else if (isMessageCode_P(NMEA0183Msg,PSTR("RMB"))) {
     HandleRMB(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("RMC")) {
+  } else if (isMessageCode_P(NMEA0183Msg,PSTR("RMC"))) {
     HandleRMC(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("WPL")) {
+  } else if (isMessageCode_P(NMEA0183Msg,PSTR("WPL"))) {
     HandleWPL(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("BOD")) {
+  } else if (isMessageCode_P(NMEA0183Msg,PSTR("BOD"))) {
     HandleBOD(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("VTG")) {
+  } else if (isMessageCode_P(NMEA0183Msg,PSTR("VTG"))) {
     HandleVTG(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("HDT")) {
+  } else if (isMessageCode_P(NMEA0183Msg,PSTR("HDT"))) {
     HandleHDT(NMEA0183Msg);
-  } else if (NMEA0183Msg.IsMessageCode("RTE")) {
+  } else if (isMessageCode_P(NMEA0183Msg,PSTR("RTE"))) {
     HandleRTE(NMEA0183Msg);
   }
-}
+} 
