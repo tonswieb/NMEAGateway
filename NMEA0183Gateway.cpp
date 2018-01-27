@@ -68,7 +68,8 @@ NMEA0183Gateway::NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream*
     log_P("INFO : Initializing NMEA0183 communication at ");log(9600);logln_P(" baud. Make sure the NMEA device uses the same baudrate.");
     log_P(" Memory free: "); logln(freeMemory());
   }
-  NMEA0183.Begin(nmea0183,3, 9600);
+  NMEA0183.SetMessageStream(nmea0183);
+  NMEA0183.Open();
 }
 
 /**
@@ -375,7 +376,12 @@ void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
     //Combine the waypoints of correlated RTE messages in a central list.
     //Will be processed when the last RTE message is recevied.
     for (int i=0; i<rte.nrOfwp; i++) {
-      if (route.equalToPrevious == false || strcmp(route.names[route.size], rte.wp[i]) != 0) {
+      if (route.size >= MAX_WP_PER_ROUTE) {
+        if (LOG_WARN) {
+          log_P("WARN : Maximum waypoints per route is reached. Ignoring waypoint: ");logln(rte.wp[i]);
+        }
+      }
+      else if (route.equalToPrevious == false || strcmp(route.names[route.size], rte.wp[i]) != 0) {
         strcpy(route.names[route.size], rte.wp[i]);
         route.equalToPrevious = false;
       }
@@ -431,7 +437,11 @@ void NMEA0183Gateway::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   tWPL wpl;
   if (NMEA0183ParseWPL(NMEA0183Msg,wpl)) {
     byte i = route.wplIndex;
-    if (strcmp(route.names[i],wpl.name) == 0) {
+    if (route.wplIndex >= MAX_WP_PER_ROUTE) {
+        if (LOG_WARN) {
+          log_P("WARN : Maximum waypoints per route is reached. Ignoring waypoint: ");logln(wpl.name);
+        }      
+    } else if (strcmp(route.names[i],wpl.name) == 0) {
       tCoordinates coordinates;
       coordinates.latitude = wpl.latitude;
       coordinates.longitude = wpl.longitude;

@@ -31,6 +31,11 @@ Author: Timo Lappalainen, Ton Swieb
 #define DEBUG_LEVEL_WARN 1
 #define DEBUG_LEVEL_ERROR 0
 
+#if !defined(MAX_WP_PER_ROUTE)
+  #define MAX_WP_PER_ROUTE 30
+#endif
+
+
 /**
  * Defines the information needed to send a route from NMEA 0183 to NMEA 2000.
  * The last complete received route, for periodic sending.
@@ -46,8 +51,8 @@ struct tCoordinates {
 struct tRoute {
 
   //An ordered list of waypointnames as received from RTE messages.
-  char names[30][21];
-  tCoordinates coordinates[30];
+  char names[MAX_WP_PER_ROUTE][NMEA0183_MAX_WP_NAME_LENGTH + 1];
+  tCoordinates coordinates[MAX_WP_PER_ROUTE];
   /*
    * The last received RTE message set is equal to the previous received RTE message set.
    * So normally the WPL messages received in between should be aligned with the RTE message set and 
