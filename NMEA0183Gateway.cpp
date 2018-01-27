@@ -45,77 +45,28 @@ double toMagnetic(double True, double Variation) {
   return magnetic;    
 }
 
-/**
- * With Garmin GPS 120 GOTO route we only get 1 waypoint. The destination.
- * Perhaps this is the default for all NMEA0183 devices.
- * For NMEA2000 the destination needs to be 2nd waypoint in the route. 
- * So lets at the current location as the 1st waypoint in the route.
- */
-void handleGarminGPS120GOTO(tRoute &route, double latitude, double longitude) {
-  
-  tWPL wpl;
-  wpl.name = "CURRENT";
-  wpl.latitude = latitude;
-  wpl.longitude = longitude;
-  route.wpMap[wpl.name] = wpl;
-  route.wpList.insert(route.wpList.begin(),wpl.name);
-}
+int NMEA0183Gateway::findOriginCurrentLeg(tRoute &route, const char* originID) {
 
-void NMEA0183Gateway::removeWaypointsUpToOriginCurrentLeg(tRoute &route, const std::string originID) {
-
-  bool originFound=false;
-  std::list<std::string>::iterator it = route.wpList.begin();
-  for (; it!=route.wpList.end(); ++it) {
-    if (*it == originID) {
-      originFound=true;
-      break;
+  for (byte i=0; i < route.size; i++) {
+    if (strcmp(route.names[i], originID) == 0) {
+      return i;
     }
   }
-  if (originFound) {
-    route.wpList.erase(route.wpList.begin(),it);
-  } else if (LOG_WARN) {
-    //Should normally not occur the BOD and RTE's are send in the same NMEA0183 cycle so thesee should be in sync.
-    logln_P("WARN : The origin of the leg not found in the waypoint list of the route.");
+
+  if (LOG_WARN) {
+    logln_P("WARN : The origin of the leg not found in the waypoint list of the route.");    
   }
+  return 0;
 }
-
-/*
- * Very inefficient method, perhaps calling this method should be preceded by calculating a hash over the route to find out if the route has changed.
- * Another alternative could be creating a temporary map, by moving (swapping) the entries still needed, clearing the original map and swapping the temporary items back.
- * If we swap item by item it should not have much memory overhead.
- */
-void NMEA0183Gateway::removeUnusedWaypointsFromRoute(tRoute &route) {
-
-  //TODO: See how we can reclaim memory in case the route is shrinked to a shorter one.
-  for (std::map<std::string,tWPL>::iterator it = route.wpMap.begin(); it!=route.wpMap.end(); ++it) {
-    boolean mapElementFoundInWpList = false;
-    for (std::string currWp : route.wpList) {
-      if (it->first == currWp) {
-        mapElementFoundInWpList = true;
-        break;
-      }
-    }
-    if (!mapElementFoundInWpList) {
-      if (LOG_INFO) {
-        log_P("INFO : Removing WPL which is no longer in route: ");logln(it->first.c_str());
-      }
-      route.wpMap.erase(it);
-    }
-  }
-}
-
-
-
 
 NMEA0183Gateway::NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream* debugStream, int debugLevel) {
 
   this->debugStream = debugStream;
   this->debugLevel = debugLevel;
   this->pNMEA2000 = pNMEA2000;
-  memoryMin = freeMemory();
   if (LOG_INFO) {
     log_P("INFO : Initializing NMEA0183 communication at ");log(9600);logln_P(" baud. Make sure the NMEA device uses the same baudrate.");
-    log_P(" Memory Min: "); logln(memoryMin);
+    log_P(" Memory free: "); logln(freeMemory());
   }
   NMEA0183.Begin(nmea0183,3, 9600);
 }
@@ -131,23 +82,13 @@ void NMEA0183Gateway::handleLoop() {
 
   tNMEA0183Msg NMEA0183Msg;  
   while (NMEA0183.GetMessage(NMEA0183Msg)) {
-    HandleNMEA0183Msg(NMEA0183Msg);  
-    if (freeMemory() < memoryMin) {
-        memoryMin = freeMemory();
-    }
+    HandleNMEA0183Msg(NMEA0183Msg);
   }
   
   static unsigned long timeUpdated=millis();
   if (timeUpdated+5000 < millis()) {
     timeUpdated=millis();
-    if (!route.wpListInProgress) {
-      sendPGN129285(route);    
-    } else if (LOG_INFO) {
-      logln_P("INFO : Skip sending PGN129285, because waypoint list for route is being rebuild.");
-    }
-    if (freeMemory() < memoryMin) {
-        memoryMin = freeMemory();
-    }
+    sendPGN129285(route);
   }
 }
 
@@ -196,8 +137,8 @@ void NMEA0183Gateway::sendPGN129284(const tRMB &rmb) {
                           bod.magBearing,Mbtw,originID,destinationID,rmb.latitude,rmb.longitude,rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
     if (LOG_TRACE) {
-      log_P("TRACE: 129284: originID="); log(bod.originID.c_str());log_P(",");logln(originID);
-      log_P("TRACE: 129284: destinationID="); log(bod.destID.c_str());log_P(",");logln(destinationID);
+      log_P("TRACE: 129284: originID="); log(bod.originID);log_P(",");logln(originID);
+      log_P("TRACE: 129284: destinationID="); log(bod.destID);log_P(",");logln(destinationID);
       log_P("TRACE: 129284: latitude="); logln(rmb.latitude,5);
       log_P("TRACE: 129284: longitude="); logln(rmb.longitude,5);
       log_P("TRACE: 129284: ArrivalCircleEntered="); logln(ArrivalCircleEntered);
@@ -218,34 +159,43 @@ void NMEA0183Gateway::sendPGN129284(const tRMB &rmb) {
  */
 void NMEA0183Gateway::sendPGN129285(tRoute &route) {
 
-  //TODO: Until the first complete cycle of alle WPL and RTE messages, the PGN send is rubish and should be avoided.
-  tN2kMsg N2kMsg;
-  int i=0;
-  SetN2kPGN129285(N2kMsg,i, 1, route.routeID, false, false, "Unknown");
+  if (!route.valid) {
+    if (LOG_INFO) {
+      logln_P("INFO : Skip sending PGN129285, route is not complete yet.");          
+    }
+    return;
+  }
 
-  for (std::string currWp : route.wpList) {
-    //Continue adding waypoints as long as they fit within a single message
-    tWPL wpl = route.wpMap[currWp];
-    if (wpl.name == currWp) {
+  tN2kMsg N2kMsg;
+  SetN2kPGN129285(N2kMsg,0, 1, route.routeID, false, false, "Unknown");
+
+  /*
+   * With Garmin GPS 120 GOTO route we only get 1 waypoint. The destination. Perhaps this is the default for all NMEA0183 devices.
+   * For NMEA2000 the destination needs to be 2nd waypoint in the route. So lets at the current location as the 1st waypoint in the route.
+   */   
+  if (route.size == 1) {
+    AppendN2kPGN129285(N2kMsg, 0, "CURRENT", Latitude, Longitude);
+    AppendN2kPGN129285(N2kMsg, 1, route.names[0], route.coordinates[0].latitude, route.coordinates[0].longitude);
+    if (LOG_TRACE) {
+        log_P("TRACE: 129285:");log("CURRENT");log_P(",");log(Latitude);log_P(",");log(Longitude);log_P("\n");      
+        log_P("TRACE: 129285:");log(route.names[0]);log_P(",");log(route.coordinates[0].latitude);log_P(",");log(route.coordinates[0].longitude);log_P("\n");      
+    }
+  } else {
+    for (byte i=route.originCurrentLeg; i < route.size; i++) {
+      byte j = i - route.originCurrentLeg;
+      //Continue adding waypoints as long as they fit within a single message
       if (LOG_TRACE) {
-        log_P("TRACE: 129285:");
-        log(wpl.name.c_str());log_P(",");
-        log(wpl.latitude);log_P(",");
-        log(wpl.longitude);log_P("\n");
+        log_P("TRACE: 129285:");log(route.names[i]);log_P(",");log(route.coordinates[i].latitude);log_P(",");log(route.coordinates[i].longitude);log_P("\n");
       }
-      if (!AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude)) {
+      if (!AppendN2kPGN129285(N2kMsg, j, route.names[i], route.coordinates[i].latitude, route.coordinates[i].longitude)) {
         //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
         pNMEA2000->SendMsg(N2kMsg); 
         N2kMsg.Clear();
-        SetN2kPGN129285(N2kMsg,i, 1, route.routeID, false, false, "Unknown");
+        SetN2kPGN129285(N2kMsg,j, 1, route.routeID, false, false, "Unknown");
         //TODO: Check for the result of the Append, should not fail due to message size. Perhaps some other reason?
-        AppendN2kPGN129285(N2kMsg, i, currWp.c_str(), wpl.latitude, wpl.longitude);
+        AppendN2kPGN129285(N2kMsg, j, route.names[i], route.coordinates[i].latitude, route.coordinates[i].longitude);
       }
-    } else if (LOG_TRACE)  {
-        log_P("TRACE: 129285: Skipping ");
-        log(currWp.c_str());log_P("\n");
     }
-    i++;
   }
   pNMEA2000->SendMsg(N2kMsg);       
 }
@@ -295,8 +245,8 @@ void NMEA0183Gateway::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
       log_P("TRACE: RMB: DTW="); logln(rmb.dtw);
       log_P("TRACE: RMB: BTW="); logln(rmb.btw);
       log_P("TRACE: RMB: VMG="); logln(rmb.vmg);
-      log_P("TRACE: RMB: OriginID="); logln(rmb.originID.c_str());
-      log_P("TRACE: RMB: DestinationID="); logln(rmb.destID.c_str());
+      log_P("TRACE: RMB: OriginID="); logln(rmb.originID);
+      log_P("TRACE: RMB: DestinationID="); logln(rmb.destID);
       log_P("TRACE: RMB: Latittude="); logln(rmb.latitude,5);
       log_P("TRACE: RMB: Longitude="); logln(rmb.longitude,5);
     }
@@ -392,8 +342,8 @@ void NMEA0183Gateway::HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
     if (LOG_TRACE) {
       log_P("TRACE: BOD: True heading="); logln(bod.trueBearing);
       log_P("TRACE: BOD: Magnetic heading="); logln(bod.magBearing);
-      log_P("TRACE: BOD: Origin ID="); logln(bod.originID.c_str());
-      log_P("TRACE: BOD: Dest ID="); logln(bod.destID.c_str());
+      log_P("TRACE: BOD: Origin ID="); logln(bod.originID);
+      log_P("TRACE: BOD: Dest ID="); logln(bod.destID);
     }
   } else if (LOG_ERROR) { logln_P("Failed to parse BOD"); }
 }
@@ -412,28 +362,52 @@ void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
   if (NMEA0183ParseRTE(NMEA0183Msg,rte)) {
 
     if (rte.currSentence == 1) {
-       route.wpListInProgress = true;
-       route.routeID = rte.routeID;
-       route.wpList.clear();
+      //Assume the route received is equal to the previous route received until proven otherwise based on
+      //comparing the waypoints names received and hence assume all coordinates are received as well 
+      //in between the two received routes.
+      route.equalToPrevious = true;
+      route.valid = false;
+      route.routeID = rte.routeID;
+      route.size = 0;
+      route.wplIndex = 0;
     }
 
-    //Combine the waypoints of correlated RTE messages in a central ist.
+    //Combine the waypoints of correlated RTE messages in a central list.
     //Will be processed when the last RTE message is recevied.
-    for (char* currWp : rte.wp) {
-      std::string wp = currWp;
-      route.wpList.push_back(wp);
+    for (int i=0; i<rte.nrOfwp; i++) {
+      if (route.equalToPrevious == false || strcmp(route.names[route.size], rte.wp[i]) != 0) {
+        strcpy(route.names[route.size], rte.wp[i]);
+        route.equalToPrevious = false;
+      }
+      route.size++;
+    }
+    if (LOG_TRACE) {
+      log_P("TRACE: RTE equal to previous: ");logln(route.equalToPrevious);
+      log_P("TRACE: Waypoints in RTE message: ");
+      for (byte i=0; i<rte.nrOfwp;i++) {
+        log(rte.wp[i]);log_P(",");
+      }
+      log("\n");      
+      log_P("TRACE: Waypoints in Route list: ");
+      for (byte i=0; i<route.size;i++) {
+        log(route.names[i]);log_P(",");
+      }
+      log("\n");
     }
 
     if (rte.currSentence == rte.nrOfsentences) {
-      if (route.wpList.size() == 1) {
-        handleGarminGPS120GOTO(route, Latitude,Longitude);
-      } else if (rte.type == 'c') {
-        //No need to remove waypoints when rte.type == 'w'
-        removeWaypointsUpToOriginCurrentLeg(route, bod.originID);
+      if (route.size != 1 && rte.type == 'c') {
+        route.originCurrentLeg = findOriginCurrentLeg(route, bod.originID);
+      } else {
+        //No need to find origin when rte.type == 'w', because the 1st wp is the origin
+        route.originCurrentLeg = 0;
       }
-      removeUnusedWaypointsFromRoute(route);
-      route.wpListInProgress = false;
-      //Sending PGN129285 is handled from a timer.     
+      if (route.equalToPrevious) {
+      	//The RTE is marked as valid after receiving the same RTE sequence twice
+      	//and alle WPL messages in between with the coordinates.
+        route.valid = true;
+      }
+      //Sending PGN129285 is handled from a timer.
     }
 
     if (LOG_TRACE) {
@@ -456,12 +430,32 @@ void NMEA0183Gateway::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   
   tWPL wpl;
   if (NMEA0183ParseWPL(NMEA0183Msg,wpl)) {
-    route.wpMap[wpl.name] = wpl;
-    if (LOG_TRACE) {
-      log_P("TRACE: WPL: Time="); logln(millis());
-      log_P("TRACE: WPL: Name="); logln(route.wpMap[wpl.name].name.c_str());
-      log_P("TRACE: WPL: Latitude="); logln(route.wpMap[wpl.name].latitude);
-      log_P("TRACE: WPL: Longitude="); logln(route.wpMap[wpl.name].longitude);
+    byte i = route.wplIndex;
+    if (strcmp(route.names[i],wpl.name) == 0) {
+      tCoordinates coordinates;
+      coordinates.latitude = wpl.latitude;
+      coordinates.longitude = wpl.longitude;
+      route.coordinates[i] = coordinates;
+      if (LOG_TRACE) {
+        log_P("TRACE: WPL: Time="); logln(millis());
+        log_P("TRACE: WPL: Name="); logln(route.names[i]);
+        log_P("TRACE: WPL: Latitude="); logln(route.coordinates[i].latitude);
+        log_P("TRACE: WPL: Longitude="); logln(route.coordinates[i].longitude);
+      }      
+      route.wplIndex++;     
+    } else {
+      //Invalidate the route. Apparently the RTE messages are not in sync with the WPL messages.
+      //Normally WPL messages are send in the same order as the order in the RTE messages.
+      //Should be an exceptional case, for example when we cannot keep up. So let's wait for a new RTE message and try again.
+      route.valid = false;
+      if (LOG_WARN) {
+        logln_P("WARN : The received WPL message is not in sync with the previously received RTE messages.");
+      }
+      if (LOG_DEBUG) {
+        log_P("DEBUG: RTE: Name="); logln(route.names[i]);
+        log_P("DEBUG: WPL: Name="); logln(wpl.name);
+        log_P("DEBUG: RTL: Index="); logln(i);
+      }      
     }
   } else if (LOG_ERROR) { logln_P("Failed to parse WPL"); }
 }
@@ -479,7 +473,7 @@ boolean isMessageCode_P(const tNMEA0183Msg &NMEA0183Msg, const char* code) {
 void NMEA0183Gateway::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (LOG_DEBUG) {
-      log_P("DEBUG : Memory min: "); log(memoryMin);
+      log_P("DEBUG : Memory free: "); log(freeMemory());
       log_P(" Handling NMEA0183 message "); logln(NMEA0183Msg.MessageCode());
   }
 

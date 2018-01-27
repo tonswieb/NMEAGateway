@@ -16,11 +16,6 @@ Author: Timo Lappalainen, Ton Swieb
 #ifndef _NMEA0183Gateway_H_
 #define _NMEA0183Gateway_H_
 
-#include <StandardCplusplus.h>
-#include <list>
-#include <map>
-#include <string>
-
 #include <N2kMsg.h>
 #include <NMEA2000.h>
 #include <N2kMessages.h>
@@ -42,15 +37,42 @@ Author: Timo Lappalainen, Ton Swieb
  * A route in progress.
  * Upon receiving all WPL messages en RTE messages the routeComplete is updated and the routeInProgress cleared.
  */
+struct tCoordinates {
+  double latitude;
+  double longitude;
+};
+
+ 
 struct tRoute {
 
   //An ordered list of waypointnames as received from RTE messages.
-  std::list<std::string> wpList;
-  //A map of waypoints received from WPL messages.
-  std::map<std::string,tWPL> wpMap;
-  boolean wpListInProgress;
+  char names[30][21];
+  tCoordinates coordinates[30];
+  /*
+   * The last received RTE message set is equal to the previous received RTE message set.
+   * So normally the WPL messages received in between should be aligned with the RTE message set and 
+   * we should have all information to send PGN129285 messages.
+   */
+  boolean equalToPrevious = false;
+  
+  /*
+   * The route is valid in case equalToPrevious is true and the waypoint names of the received WPL messages in order
+   * are in sync with the order of the names received via the RTE messages.
+   */
+  boolean valid = false;
+  //The total size of the route.
+  byte size;
+  /*
+   * The index of the WPL messages received.
+   * The first WPL after the last RTE has index 0.
+   * The last WPL before the first RTE has index = size;
+   */
+  byte wplIndex = 0;
+  /*
+   * The index of the waypoint in the route which is the origin of the current leg. 
+   */
+  byte originCurrentLeg = 0;
   unsigned int routeID;
-    
 };
 
 class NMEA0183Gateway {
@@ -65,11 +87,8 @@ class NMEA0183Gateway {
     tNMEA2000* pNMEA2000;
     Stream* debugStream=0;
     int debugLevel;
-    int memoryMin;
 
-    void removeWaypointsUpToOriginCurrentLeg(tRoute &route, const std::string originID);
-    void removeUnusedWaypointsFromRoute(tRoute &route);
-
+    int findOriginCurrentLeg(tRoute &route, const char* originID);
 
     void sendPGN129283(const tRMB &rmb);
     void sendPGN129284(const tRMB &rmb);

@@ -12,16 +12,25 @@ Reads compass heading and forwards it to the N2k bus.
 #include <NMEA2000_CAN.h>  // This will automatically choose right CAN library and create suitable NMEA2000 object
 #include "NMEA0183Gateway.h"
 #include "CompassHeading.h"
+#include <MemoryFree.h>
 
 NMEA0183Gateway * pNmea0183Gateway;
 CompassHeading * pCompassHeading;
 
 void setup() {
 
-  Serial.begin(1000000);
+  Serial.begin(250000);
+  Serial.print(F("Start initializing NMEA Gateway. Free memory:"));Serial.println(freeMemory());
+  Serial.print(F("Start initializing NMEA200 library. Free memory:"));Serial.println(freeMemory());
   setupNMEA2000Lib(&NMEA2000, &Serial);
-  pNmea0183Gateway = new NMEA0183Gateway(&NMEA2000, &Serial3, &Serial,DEBUG_LEVEL_INFO);
+  Serial.print(F("Finished initializing NMEA200 library. Free memory:"));Serial.println(freeMemory());
+  Serial.print(F("Start initializing NMEA0183 Gateway library. Free memory:"));Serial.println(freeMemory());
+  pNmea0183Gateway = new NMEA0183Gateway(&NMEA2000, &Serial3, &Serial,DEBUG_LEVEL_TRACE);
+  Serial.print(F("Finished initializing NMEA0183 Gateway library. Free memory:"));Serial.println(freeMemory());
+  Serial.print(F("Start initializing Compass Heading library. Free memory:"));Serial.println(freeMemory());
   pCompassHeading = new CompassHeading(&NMEA2000,&Serial);
+  Serial.print(F("Finished initializing Compass Heading library. Free memory:"));Serial.println(freeMemory());
+  Serial.print(F("Finished initializing NMEA Gateway. Memor min:"));Serial.println(freeMemory());
 }
 
 void loop() {
