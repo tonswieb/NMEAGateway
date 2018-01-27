@@ -93,11 +93,16 @@ class NMEA0183Gateway {
     Stream* debugStream=0;
     int debugLevel;
 
-    int findOriginCurrentLeg(tRoute &route, const char* originID);
+    int findOriginCurrentLeg();
 
+    void sendPGN127250(const double &heading);
+    void sendPGN129025(const double &latitude, const double &longitude);
+    void sendPGN129026(const tN2kHeadingReference ref, const double &COG, const double &SOG);
+    void sendPGN129029(const tGGA &gga);
     void sendPGN129283(const tRMB &rmb);
     void sendPGN129284(const tRMB &rmb);
-    void sendPGN129285(tRoute &route);
+    void sendPGN129285();
+
     void HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg);
     void HandleRMB(const tNMEA0183Msg &NMEA0183Msg);
     void HandleRMC(const tNMEA0183Msg &NMEA0183Msg);

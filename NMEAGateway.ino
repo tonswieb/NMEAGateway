@@ -10,7 +10,6 @@ Reads compass heading and forwards it to the N2k bus.
 
 #define USE_MCP_CAN_CLOCK_SET 8
 #define NMEA0183_MAX_WP_NAME_LENGTH 6
-#define NMEA0183_MAX_WP_IN_RTE 15
 #include <NMEA2000_CAN.h>  // This will automatically choose right CAN library and create suitable NMEA2000 object
 #include "NMEA0183Gateway.h"
 #include "CompassHeading.h"
@@ -56,7 +55,7 @@ void setupNMEA2000Lib(tNMEA2000* pNMEA2000, Stream* forwardStream) {
 
   
   pNMEA2000->SetForwardOwnMessages(); //Uncomment this to see the own messages we are sending.
-  pNMEA2000->SetDebugMode(tNMEA2000::dm_ClearText); // Uncomment this, so you can test code without CAN bus chips on Arduino Mega
+  //pNMEA2000->SetDebugMode(tNMEA2000::dm_ClearText); // Uncomment this, so you can test code without CAN bus chips on Arduino Mega
 
   pNMEA2000->Open();
 }

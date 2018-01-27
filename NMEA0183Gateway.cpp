@@ -45,10 +45,10 @@ double toMagnetic(double True, double Variation) {
   return magnetic;    
 }
 
-int NMEA0183Gateway::findOriginCurrentLeg(tRoute &route, const char* originID) {
+int NMEA0183Gateway::findOriginCurrentLeg() {
 
   for (byte i=0; i < route.size; i++) {
-    if (strcmp(route.names[i], originID) == 0) {
+    if (strcmp(route.names[i], bod.originID) == 0) {
       return i;
     }
   }
@@ -65,7 +65,7 @@ NMEA0183Gateway::NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream*
   this->debugLevel = debugLevel;
   this->pNMEA2000 = pNMEA2000;
   if (LOG_INFO) {
-    log_P("INFO : Initializing NMEA0183 communication at ");log(9600);logln_P(" baud. Make sure the NMEA device uses the same baudrate.");
+    log_P("INFO : Initializing NMEA0183 communication. Make sure the NMEA device uses the same baudrate ");                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
     log_P(" Memory free: "); logln(freeMemory());
   }
   NMEA0183.SetMessageStream(nmea0183);
@@ -89,7 +89,7 @@ void NMEA0183Gateway::handleLoop() {
   static unsigned long timeUpdated=millis();
   if (timeUpdated+5000 < millis()) {
     timeUpdated=millis();
-    sendPGN129285(route);
+    sendPGN129285();
   }
 }
 
@@ -158,7 +158,7 @@ void NMEA0183Gateway::sendPGN129284(const tRMB &rmb) {
  * Send the active route with all waypoints from the origin of the current leg and onwards.
  * So the waypoint that corresponds with the originID from the BOD message should be the 1st. The destinationID from the BOD message should be the 2nd. Etc.
  */
-void NMEA0183Gateway::sendPGN129285(tRoute &route) {
+void NMEA0183Gateway::sendPGN129285() {
 
   if (!route.valid) {
     if (LOG_INFO) {
@@ -201,6 +201,38 @@ void NMEA0183Gateway::sendPGN129285(tRoute &route) {
   pNMEA2000->SendMsg(N2kMsg);       
 }
 
+void NMEA0183Gateway::sendPGN129029(const tGGA &gga) {
+  
+    tN2kMsg N2kMsg;
+    SetN2kGNSS(N2kMsg,1,DaysSince1970,gga.GPSTime,gga.latitude,gga.longitude,gga.altitude,
+              N2kGNSSt_GPS,GNSMethofNMEA0183ToN2k(gga.GPSQualityIndicator),gga.satelliteCount,gga.HDOP,0,
+              gga.geoidalSeparation,1,N2kGNSSt_GPS,gga.DGPSReferenceStationID,gga.DGPSAge
+              );
+    pNMEA2000->SendMsg(N2kMsg); 
+}
+
+void NMEA0183Gateway::sendPGN129025(const double &latitude, const double &longitude) {
+
+    tN2kMsg N2kMsg;
+    SetN2kLatLonRapid(N2kMsg, latitude, longitude);
+    pNMEA2000->SendMsg(N2kMsg);
+}
+
+void NMEA0183Gateway::sendPGN129026(const tN2kHeadingReference ref, const double &COG, const double &SOG) {
+
+    tN2kMsg N2kMsg;
+    SetN2kCOGSOGRapid(N2kMsg,1,ref,COG,SOG);
+    pNMEA2000->SendMsg(N2kMsg);
+}
+
+void NMEA0183Gateway::sendPGN127250(const double &trueHeading) {
+
+    tN2kMsg N2kMsg;
+    double MHeading = toMagnetic(trueHeading,Variation);
+    SetN2kMagneticHeading(N2kMsg,1,MHeading,0,Variation);
+    pNMEA2000->SendMsg(N2kMsg);
+}
+
 // NMEA0183 message Handler functions
 void NMEA0183Gateway::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
 
@@ -208,12 +240,8 @@ void NMEA0183Gateway::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
   if (NMEA0183ParseRMC(NMEA0183Msg,rmc) && rmc.status == 'A') {
     tN2kMsg N2kMsg;
     double MCOG = toMagnetic(rmc.trueCOG,rmc.variation);
-    //PGN129026
-    SetN2kCOGSOGRapid(N2kMsg,1,N2khr_magnetic,MCOG,rmc.SOG); 
-    pNMEA2000->SendMsg(N2kMsg);
-    //PGN129025
-    SetN2kLatLonRapid(N2kMsg,rmc.latitude,rmc.longitude);
-    pNMEA2000->SendMsg(N2kMsg);
+    sendPGN129026(N2khr_magnetic,MCOG,rmc.SOG);
+    sendPGN129025(rmc.latitude,rmc.longitude);
     Latitude = rmc.latitude;
     Longitude = rmc.longitude;
     DaysSince1970 = rmc.daysSince1970;
@@ -259,13 +287,7 @@ void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
 
   tGGA gga;
   if (NMEA0183ParseGGA(NMEA0183Msg,gga) && gga.GPSQualityIndicator > 0) {
-    tN2kMsg N2kMsg;
-    //129029
-    SetN2kGNSS(N2kMsg,1,DaysSince1970,gga.GPSTime,gga.latitude,gga.longitude,gga.altitude,
-              N2kGNSSt_GPS,GNSMethofNMEA0183ToN2k(gga.GPSQualityIndicator),gga.satelliteCount,gga.HDOP,0,
-              gga.geoidalSeparation,1,N2kGNSSt_GPS,gga.DGPSReferenceStationID,gga.DGPSAge
-              );
-    pNMEA2000->SendMsg(N2kMsg); 
+    sendPGN129029(gga);
     Latitude = gga.latitude;
     Longitude = gga.longitude;
 
@@ -289,10 +311,7 @@ void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
 
   tGLL gll;
   if (NMEA0183ParseGLL(NMEA0183Msg,gll) && gll.status == 'A') {
-    tN2kMsg N2kMsg;
-    //PGN129025
-    SetN2kLatLonRapid(N2kMsg, gll.latitude, gll.longitude);
-    pNMEA2000->SendMsg(N2kMsg);
+    sendPGN129025(gll.latitude,gll.longitude);
     Latitude = gll.latitude;
     Longitude = gll.longitude;
 
@@ -309,10 +328,7 @@ void NMEA0183Gateway::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
 
   double TrueHeading;
   if (NMEA0183ParseHDT(NMEA0183Msg,TrueHeading)) {
-    tN2kMsg N2kMsg;
-    double MHeading = toMagnetic(TrueHeading,Variation);
-    SetN2kMagneticHeading(N2kMsg,1,MHeading,0,Variation);
-    pNMEA2000->SendMsg(N2kMsg);
+    sendPGN127250(TrueHeading);
     if (LOG_TRACE) {
       log_P("TRACE: True heading="); logln(TrueHeading);
     }
@@ -324,9 +340,7 @@ void NMEA0183Gateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
   
   if (NMEA0183ParseVTG(NMEA0183Msg,COG,MagneticCOG,SOG)) {
     Variation=COG-MagneticCOG; // Save variation for Magnetic heading
-    tN2kMsg N2kMsg;
-    SetN2kCOGSOGRapid(N2kMsg,1,N2khr_true,COG,SOG);
-    pNMEA2000->SendMsg(N2kMsg);
+    sendPGN129026(N2khr_true,COG,SOG);
     if (LOG_TRACE) {
       log_P("TRACE: COG="); logln(COG);
     }
@@ -403,7 +417,7 @@ void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
 
     if (rte.currSentence == rte.nrOfsentences) {
       if (route.size != 1 && rte.type == 'c') {
-        route.originCurrentLeg = findOriginCurrentLeg(route, bod.originID);
+        route.originCurrentLeg = findOriginCurrentLeg();
       } else {
         //No need to find origin when rte.type == 'w', because the 1st wp is the origin
         route.originCurrentLeg = 0;
