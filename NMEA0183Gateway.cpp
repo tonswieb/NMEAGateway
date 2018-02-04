@@ -392,11 +392,11 @@ void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
     for (int i=0; i<rte.nrOfwp; i++) {
       if (route.size >= MAX_WP_PER_ROUTE) {
         if (LOG_WARN) {
-          log_P("WARN : Maximum waypoints per route is reached. Ignoring waypoint: ");logln(rte.wp[i]);
+          log_P("WARN : Maximum waypoints per route is reached. Ignoring waypoint: ");logln(rte[i]);
         }
       }
-      else if (route.equalToPrevious == false || strcmp(route.names[route.size], rte.wp[i]) != 0) {
-        strcpy(route.names[route.size], rte.wp[i]);
+      else if (route.equalToPrevious == false || strcmp(route.names[route.size], rte[i]) != 0) {
+        strcpy(route.names[route.size], rte[i]);
         route.equalToPrevious = false;
       }
       route.size++;
@@ -405,7 +405,7 @@ void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
       log_P("TRACE: RTE equal to previous: ");logln(route.equalToPrevious);
       log_P("TRACE: Waypoints in RTE message: ");
       for (byte i=0; i<rte.nrOfwp;i++) {
-        log(rte.wp[i]);log_P(",");
+        log(rte[i]);log_P(",");
       }
       log("\n");      
       log_P("TRACE: Waypoints in Route list: ");
