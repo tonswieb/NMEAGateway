@@ -7,16 +7,20 @@ Reads NMEA0183 messages and forwards them tho the N2k bus.
 Reads compass heading and forwards it to the N2k bus.
 
 */
-
 #define USE_MCP_CAN_CLOCK_SET 8
-#define NMEA0183_MAX_WP_NAME_LENGTH 6
 #include <NMEA2000_CAN.h>  // This will automatically choose right CAN library and create suitable NMEA2000 object
+#include "Log.h"
 #include "NMEA0183Gateway.h"
 #include "CompassHeading.h"
 #include <MemoryFree.h>
 
+//Defaults for Garmin GPS120 / Garmin GPS 12
+#define MAX_WP_PER_ROUTE 30
+#define MAX_WP_NAME_LENGTH 6
+
+
 NMEA0183Gateway * pNmea0183Gateway;
-CompassHeading * pCompassHeading;
+//CompassHeading * pCompassHeading;
 
 void setup() {
 
@@ -27,10 +31,10 @@ void setup() {
   setupNMEA2000Lib(&NMEA2000, &Serial);
   Serial.print(F("Finished initializing NMEA200 library. Free memory:"));Serial.println(freeMemory());
   Serial.print(F("Start initializing NMEA0183 Gateway library. Free memory:"));Serial.println(freeMemory());
-  pNmea0183Gateway = new NMEA0183Gateway(&NMEA2000, &Serial3, &Serial,DEBUG_LEVEL_TRACE);
+  pNmea0183Gateway =  new NMEA0183Gateway(&NMEA2000, &Serial3, &Serial,DEBUG_LEVEL_TRACE,MAX_WP_PER_ROUTE,MAX_WP_NAME_LENGTH);
   Serial.print(F("Finished initializing NMEA0183 Gateway library. Free memory:"));Serial.println(freeMemory());
   Serial.print(F("Start initializing Compass Heading library. Free memory:"));Serial.println(freeMemory());
-  pCompassHeading = new CompassHeading(&NMEA2000,&Serial);
+//  pCompassHeading = new CompassHeading(&NMEA2000,&Serial);
   Serial.print(F("Finished initializing Compass Heading library. Free memory:"));Serial.println(freeMemory());
   Serial.print(F("Finished initializing NMEA Gateway. Memor min:"));Serial.println(freeMemory());
 }
@@ -38,7 +42,7 @@ void setup() {
 void loop() {
 
   pNmea0183Gateway->handleLoop();
-  pCompassHeading->handleLoop();
+//  pCompassHeading->handleLoop();
 }
 
 void setupNMEA2000Lib(tNMEA2000* pNMEA2000, Stream* forwardStream) {
@@ -55,7 +59,8 @@ void setupNMEA2000Lib(tNMEA2000* pNMEA2000, Stream* forwardStream) {
 
   
   pNMEA2000->SetForwardOwnMessages(); //Uncomment this to see the own messages we are sending.
-  //pNMEA2000->SetDebugMode(tNMEA2000::dm_ClearText); // Uncomment this, so you can test code without CAN bus chips on Arduino Mega
+  pNMEA2000->SetDebugMode(tNMEA2000::dm_ClearText); // Uncomment this, so you can test code without CAN bus chips on Arduino Mega
 
   pNMEA2000->Open();
 }
+
