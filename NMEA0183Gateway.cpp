@@ -34,16 +34,12 @@ double toMagnetic(double True, double Variation) {
   return magnetic;    
 }
 
-NMEA0183Gateway::NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream* debugStream, int debugLevel, byte maxWpPerRoute, byte maxWpNameLength) {
+NMEA0183Gateway::NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Logger* logger, byte maxWpPerRoute, byte maxWpNameLength) {
 
-  this->debugStream = debugStream;
-  this->debugLevel = debugLevel;
+  this->logger = logger;
   this->pNMEA2000 = pNMEA2000;
-  route = new Route(maxWpPerRoute, maxWpNameLength, debugStream, debugLevel);
-  if (LOG_INFO) {
-    log_P("INFO : Initializing NMEA0183 communication. Make sure the NMEA device uses the same baudrate ");                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
-    log_P(" Memory free: "); logln(freeMemory());
-  }
+  route = new Route(maxWpPerRoute, maxWpNameLength, logger);
+  info("Initializing NMEA0183 communication. Make sure the NMEA device uses the same baudrate \n Memory free: %u",freeMemory());
   NMEA0183.SetMessageStream(nmea0183);
   NMEA0183.Open();
 }
@@ -113,17 +109,8 @@ void NMEA0183Gateway::sendPGN129284(const tRMB &rmb) {
       SetN2kNavigationInfo(N2kMsg,1,rmb.dtw,N2khr_magnetic,PerpendicularCrossed,ArrivalCircleEntered,N2kdct_RhumbLine,etaTime,etaDays,
                           bod.magBearing,Mbtw,originID,destinationID,rmb.latitude,rmb.longitude,rmb.vmg);
       pNMEA2000->SendMsg(N2kMsg);
-    if (LOG_TRACE) {
-      log_P("TRACE: 129284: originID="); log(bod.originID);log_P(",");logln(originID);
-      log_P("TRACE: 129284: destinationID="); log(bod.destID);log_P(",");logln(destinationID);
-      log_P("TRACE: 129284: latitude="); logln(rmb.latitude,5);
-      log_P("TRACE: 129284: longitude="); logln(rmb.longitude,5);
-      log_P("TRACE: 129284: ArrivalCircleEntered="); logln(ArrivalCircleEntered);
-      log_P("TRACE: 129284: VMG="); logln(rmb.vmg);
-      log_P("TRACE: 129284: DTW="); logln(rmb.dtw);
-      log_P("TRACE: 129284: BTW (Current to Destination="); logln(Mbtw);
-      log_P("TRACE: 129284: BTW (Orign to Desitination)="); logln(bod.magBearing);
-    }
+      trace("129284: originID=%s,%u, destinationID=%s,%u, latitude=%s, longitude=%s, ArrivalCircleEntered=%u, VMG=%u, DTW=%u, BTW (Current to Destination)=%u, BTW (Orign to Desitination)=%u",
+      bod.originID,originID,bod.destID,destinationID,toString(rmb.latitude,6,2),toString(rmb.longitude,6,2),ArrivalCircleEntered,rmb.vmg,rmb.dtw,Mbtw,bod.magBearing);
 }
 
 /**
@@ -137,9 +124,7 @@ void NMEA0183Gateway::sendPGN129284(const tRMB &rmb) {
 void NMEA0183Gateway::sendPGN129285() {
 
   if (!route->isValid()) {
-    if (LOG_INFO) {
-      logln_P("INFO : Skip sending PGN129285, route is not complete yet.");          
-    }
+    info("Skip sending PGN129285, route is not complete yet.");
     return;
   }
 
@@ -154,18 +139,14 @@ void NMEA0183Gateway::sendPGN129285() {
     AppendN2kPGN129285(N2kMsg, 0, "CURRENT", Latitude, Longitude);
     tRouteWaypoint e = route->getWaypoint(0);
     AppendN2kPGN129285(N2kMsg, 1, e.name, e.latitude, e.longitude);
-    if (LOG_TRACE) {
-        log_P("TRACE: 129285:");log("CURRENT");log_P(",");log(Latitude);log_P(",");log(Longitude);log_P("\n");      
-        log_P("TRACE: 129285:");log(e.name);log_P(",");log(e.latitude);log_P(",");log(e.longitude);log_P("\n");      
-    }
+    trace("129285: CURRENT,%s,%s",toString(Latitude,6,2),toString(Longitude,6,2));
+    trace("129285: %s,%s,%s",e.name,toString(e.latitude,6,2),toString(e.longitude,6,2));
   } else {
     for (byte i=route->getIndexOriginCurrentLeg(); i < route->getSize(); i++) {
       byte j = i - route->getIndexOriginCurrentLeg();
       tRouteWaypoint e = route->getWaypoint(i);
       //Continue adding waypoints as long as they fit within a single message
-      if (LOG_TRACE) {
-        log_P("TRACE: 129285:");log(e.name);log_P(",");log(e.latitude);log_P(",");log(e.longitude);log_P("\n");
-      }
+      trace("129285: %s,%s,%s",e.name,toString(e.latitude,6,2),toString(e.longitude,6,2));
       if (!AppendN2kPGN129285(N2kMsg, j, e.name, e.latitude, e.longitude)) {
         //Max. nr. of waypoints per message is reached.Send a message with all waypoints upto this one and start constructing a new message.
         pNMEA2000->SendMsg(N2kMsg); 
@@ -224,17 +205,10 @@ void NMEA0183Gateway::HandleRMC(const tNMEA0183Msg &NMEA0183Msg) {
     Longitude = rmc.longitude;
     DaysSince1970 = rmc.daysSince1970;
     Variation = rmc.variation;
-    if (LOG_TRACE) {
-      log_P("TRACE: RMC: GPSTime="); logln(rmc.GPSTime);
-      log_P("TRACE: RMC: Latitude="); logln(rmc.latitude,5);
-      log_P("TRACE: RMC: Longitude="); logln(rmc.longitude,5);
-      log_P("TRACE: RMC: COG="); logln(rmc.trueCOG);
-      log_P("TRACE: RMC: SOG="); logln(rmc.SOG);
-      log_P("TRACE: RMC: DaysSince1970="); logln(rmc.daysSince1970);
-      log_P("TRACE: RMC: Variation="); logln(rmc.variation);
-    }
-  } else if (rmc.status == 'V' && LOG_WARN) { logln_P("WARN : RMC is Void");
-  } else if (LOG_ERROR) { logln_P("ERROR: Failed to parse RMC"); }
+    trace("RMC: GPSTime=%s, Latitude=%s, Longitude=%s, COG=%s, SOG=%s, DaysSince1970=%u, Variation=%s",
+    toString(rmc.GPSTime,6,2),toString(rmc.latitude,6,2),toString(rmc.longitude,6,2),toString(rmc.trueCOG,6,2),toString(rmc.SOG,6,2),rmc.daysSince1970,toString(rmc.variation,6,2));
+  } else if (rmc.status == 'V') { warn("RMC is Void");
+  } else { error("RMC: Failed to parse message"); }
 }
 
 /**
@@ -247,18 +221,10 @@ void NMEA0183Gateway::HandleRMB(const tNMEA0183Msg &NMEA0183Msg) {
   if (NMEA0183ParseRMB(NMEA0183Msg, rmb)  && rmb.status == 'A') {
     sendPGN129283(rmb);
     sendPGN129284(rmb);
-    if (LOG_TRACE) {
-      log_P("TRACE: RMB: XTE="); logln(rmb.xte);
-      log_P("TRACE: RMB: DTW="); logln(rmb.dtw);
-      log_P("TRACE: RMB: BTW="); logln(rmb.btw);
-      log_P("TRACE: RMB: VMG="); logln(rmb.vmg);
-      log_P("TRACE: RMB: OriginID="); logln(rmb.originID);
-      log_P("TRACE: RMB: DestinationID="); logln(rmb.destID);
-      log_P("TRACE: RMB: Latittude="); logln(rmb.latitude,5);
-      log_P("TRACE: RMB: Longitude="); logln(rmb.longitude,5);
-    }
-  } else if (rmb.status == 'V' && LOG_WARN) { logln_P("WARN : RMB is Void");
-  } else if (LOG_ERROR) { logln_P("ERROR: Failed to parse RMB"); }
+    trace("RMB: XTE=%s, DTW=%s, BTW=%s, VMG=%s, OriginID=%s, DestinationID=%s, Latittude=%s, Longitude=%s",
+    toString(rmb.xte,6,2),toString(rmb.dtw,6,2),toString(rmb.btw,6,2),toString(rmb.vmg,6,2),rmb.originID,rmb.destID,toString(rmb.latitude,6,2),toString(rmb.longitude,6,2));
+  } else if (rmb.status == 'V') { warn("RMB: Is Void");
+  } else { error("RMB: Failed to parse message"); }
 }
 
 void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
@@ -268,21 +234,10 @@ void NMEA0183Gateway::HandleGGA(const tNMEA0183Msg &NMEA0183Msg) {
     sendPGN129029(gga);
     Latitude = gga.latitude;
     Longitude = gga.longitude;
-
-    if (LOG_TRACE) {
-      log_P("TRACE: GGA: Time="); logln(gga.GPSTime);
-      log_P("TRACE: GGA: Latitude="); logln(gga.latitude,5);
-      log_P("TRACE: GGA: Longitude="); logln(gga.longitude,5);
-      log_P("TRACE: GGA: Altitude="); logln(gga.altitude,1);
-      log_P("TRACE: GGA: GPSQualityIndicator="); logln(gga.GPSQualityIndicator);
-      log_P("TRACE: GGA: SatelliteCount="); logln(gga.satelliteCount);
-      log_P("TRACE: GGA: HDOP="); logln(gga.HDOP);
-      log_P("TRACE: GGA: GeoidalSeparation="); logln(gga.geoidalSeparation);
-      log_P("TRACE: GGA: DGPSAge="); logln(gga.DGPSAge);
-      log_P("TRACE: GGA: DGPSReferenceStationID="); logln(gga.DGPSReferenceStationID);
-    }
-  } else if (gga.GPSQualityIndicator == 0 && LOG_WARN) { logln_P("WARN : GGA invalid GPS fix.");
-  } else if (LOG_ERROR) { logln_P("ERROR: Failed to parse GGA"); }
+    trace("GGA: Time=%s, Latitude=%s, Longitude=%s, Altitude=%s, GPSQualityIndicator=%u, SatelliteCount=%u, HDOP=%s, GeoidalSeparation=%s, DGPSAge=%s, DGPSReferenceStationID=%u",
+    toString(gga.GPSTime,6,2),toString(gga.latitude,6,2),toString(gga.longitude,6,2),toString(gga.altitude,6,2),gga.GPSQualityIndicator,gga.satelliteCount,toString(gga.HDOP,6,2),toString(gga.geoidalSeparation,6,2),toString(gga.DGPSAge,6,2),gga.DGPSReferenceStationID);
+  } else if (gga.GPSQualityIndicator == 0) { warn("GGA: Invalid GPS fix.");
+  } else { error("GGA: Failed to parse message"); }
 }
 
 void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
@@ -292,14 +247,9 @@ void NMEA0183Gateway::HandleGLL(const tNMEA0183Msg &NMEA0183Msg) {
     sendPGN129025(gll.latitude,gll.longitude);
     Latitude = gll.latitude;
     Longitude = gll.longitude;
-
-    if (LOG_TRACE) {
-      log_P("TRACE: GLL: Time="); logln(gll.GPSTime);
-      log_P("TRACE: GLL: Latitude="); logln(gll.latitude,5);
-      log_P("TRACE: GLL: Longitude="); logln(gll.longitude,5);
-    }
-  } else if (gll.status == 'V' && LOG_WARN) { logln_P("WARN : GLL is Void");
-  } else if (LOG_ERROR) { logln_P("ERROR: Failed to parse GLL"); }
+    trace("GLL: Time=%s, Latitude=%s, Longitude=%s",toString(gll.GPSTime,6,2),toString(gll.latitude,6,2),toString(gll.longitude,6,2));
+  } else if (gll.status == 'V') { warn("GLL: Is  Void");
+  } else { error("GLL: Failed to parse message"); }
 }
 
 void NMEA0183Gateway::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
@@ -307,10 +257,8 @@ void NMEA0183Gateway::HandleHDT(const tNMEA0183Msg &NMEA0183Msg) {
   double TrueHeading;
   if (NMEA0183ParseHDT(NMEA0183Msg,TrueHeading)) {
     sendPGN127250(TrueHeading);
-    if (LOG_TRACE) {
-      log_P("TRACE: True heading="); logln(TrueHeading);
-    }
-  } else if (LOG_ERROR) { logln_P("Failed to parse HDT"); }
+    trace("HDT: True heading=%s",toString(TrueHeading,6,2));
+  } else { error("HDT: Failed to parse message"); }
 }
 
 void NMEA0183Gateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
@@ -319,10 +267,8 @@ void NMEA0183Gateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
   if (NMEA0183ParseVTG(NMEA0183Msg,COG,MagneticCOG,SOG)) {
     Variation=COG-MagneticCOG; // Save variation for Magnetic heading
     sendPGN129026(N2khr_true,COG,SOG);
-    if (LOG_TRACE) {
-      log_P("TRACE: COG="); logln(COG);
-    }
-  } else if (LOG_ERROR) { logln_P("Failed to parse VTG"); }
+    trace("VTG: COG=%s",toString(COG,6,2));
+  } else { error("VTG: Failed to parse message"); }
 }
 
 /**
@@ -332,13 +278,8 @@ void NMEA0183Gateway::HandleVTG(const tNMEA0183Msg &NMEA0183Msg) {
 void NMEA0183Gateway::HandleBOD(const tNMEA0183Msg &NMEA0183Msg) {
 
   if (NMEA0183ParseBOD(NMEA0183Msg,bod)) {
-    if (LOG_TRACE) {
-      log_P("TRACE: BOD: True heading="); logln(bod.trueBearing);
-      log_P("TRACE: BOD: Magnetic heading="); logln(bod.magBearing);
-      log_P("TRACE: BOD: Origin ID="); logln(bod.originID);
-      log_P("TRACE: BOD: Dest ID="); logln(bod.destID);
-    }
-  } else if (LOG_ERROR) { logln_P("Failed to parse BOD"); }
+    trace("BOD: True heading=%s, Magnetic heading=%s, Origin ID=%s, Dest ID=%s",toString(bod.trueBearing,6,2),toString(bod.magBearing,6,2),bod.originID,bod.destID);
+  } else { error("BOD: Failed to parse message"); }
 }
 
 /**
@@ -365,26 +306,19 @@ void NMEA0183Gateway::HandleRTE(const tNMEA0183Msg &NMEA0183Msg) {
     }
     if (LOG_TRACE) {
       route->logWaypointNames();
-      log_P("TRACE: Waypoints in RTE message: ");
+      log_P("RTE: Waypoints in message: ");
       for (byte i=0; i<rte.nrOfwp;i++) {
         log(rte[i]);log_P(",");
       }
-      log("\n");
+      log_P("\n");
     }
 
     if (rte.currSentence == rte.nrOfsentences) {
       route->finalize(rte.type,bod.originID);
       //Sending PGN129285 is handled from a timer.
     }
-
-    if (LOG_TRACE) {
-      log_P("TRACE: RTE: Time="); logln(millis());
-      log_P("TRACE: RTE: Nr of sentences="); logln(rte.nrOfsentences);
-      log_P("TRACE: RTE: Current sentence="); logln(rte.currSentence);
-      log_P("TRACE: RTE: Type="); logln(rte.type);
-      log_P("TRACE: RTE: Route ID="); logln(rte.routeID);
-    }
-  } else if (LOG_ERROR) { logln_P("Failed to parse RTE"); }
+    trace("RTE: Time=%u, Nr of sentences=%u, Current sentence=%u, Type=%s, Route ID=%u",millis(),rte.nrOfsentences,rte.currSentence,rte.type,rte.routeID);
+  } else { error("RTE: Failed to parse message"); }
 }
 
 /**
@@ -398,7 +332,7 @@ void NMEA0183Gateway::HandleWPL(const tNMEA0183Msg &NMEA0183Msg) {
   tWPL wpl;
   if (NMEA0183ParseWPL(NMEA0183Msg,wpl)) {
     route->addCoordinates(wpl.name, wpl.latitude, wpl.longitude);
-  } else if (LOG_ERROR) { logln_P("Failed to parse WPL"); }
+  } else { error("WPL: Failed to parse message"); }
 }
 
 /*
@@ -413,11 +347,7 @@ boolean isMessageCode_P(const tNMEA0183Msg &NMEA0183Msg, const char* code) {
 
 void NMEA0183Gateway::HandleNMEA0183Msg(const tNMEA0183Msg &NMEA0183Msg) {
 
-  if (LOG_DEBUG) {
-      log_P("DEBUG : Memory free: "); log(freeMemory());
-      log_P(" Handling NMEA0183 message "); logln(NMEA0183Msg.MessageCode());
-  }
-
+  debug("Memory free: %u, Handling NMEA0183 message %s",freeMemory(),NMEA0183Msg.MessageCode());
   if (isMessageCode_P(NMEA0183Msg,PSTR("GGA"))) {
     HandleGGA(NMEA0183Msg);
   } else if (isMessageCode_P(NMEA0183Msg,PSTR("GGL"))) {

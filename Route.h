@@ -16,6 +16,7 @@ Author: Ton Swieb
 
 #include <Arduino.h>
 #include "Log.h"
+#include "PrintfWrapper.h"
 
 /*
  * Defaults for Garmin GPS120 / Garmin GPS 12.
@@ -49,9 +50,7 @@ private:
   unsigned int routeID;
   byte indexOriginCurrentLeg = 0; //The index of the waypoint in the route which is the origin of the current leg. 
 
-  //Logging settings
-  Stream* debugStream=0;
-  int debugLevel;
+  Logger* logger;
 
   /*
    * Is true if the last received RTE message sequence received is equal to the previous received RTE message sequence received.
@@ -111,7 +110,7 @@ public:
     return routeID;
   }
   
-  Route(byte maxWpPerRoute = MAX_WP_PER_ROUTE, byte maxWpNameLength = MAX_WP_NAME_LENGTH, Stream* debugStream = 0, int debugLevel = DEBUG_LEVEL_INFO);
+  Route(byte maxWpPerRoute = MAX_WP_PER_ROUTE, byte maxWpNameLength = MAX_WP_NAME_LENGTH, Logger* logger = 0);
 };
 
 #endif

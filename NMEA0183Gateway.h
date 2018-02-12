@@ -38,8 +38,7 @@ class NMEA0183Gateway {
     Route* route;
     tNMEA0183 NMEA0183;
     tNMEA2000* pNMEA2000;
-    Stream* debugStream=0;
-    int debugLevel;
+    Logger* logger;
 
     void sendPGN127250(const double &heading);
     void sendPGN129025(const double &latitude, const double &longitude);
@@ -61,7 +60,7 @@ class NMEA0183Gateway {
     void HandleGLL(const tNMEA0183Msg &NMEA0183Msg);
   
   public:
-    NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Stream* debugStream = 0, int debugLevel = DEBUG_LEVEL_INFO, byte maxWpPerRoute = MAX_WP_PER_ROUTE, byte maxWpNameLength = MAX_WP_NAME_LENGTH);
+    NMEA0183Gateway(tNMEA2000* pNMEA2000, Stream* nmea0183, Logger* logger, byte maxWpPerRoute = MAX_WP_PER_ROUTE, byte maxWpNameLength = MAX_WP_NAME_LENGTH);
     void handleLoop();
 };
 

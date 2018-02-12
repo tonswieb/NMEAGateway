@@ -14,10 +14,9 @@ Author: Ton Swieb
 #include "Route.h"
 
 
-Route::Route(byte maxWpPerRoute, byte maxWpNameLength, Stream* debugStream, int debugLevel) {
-  
-  this->debugStream = debugStream;
-  this->debugLevel = debugLevel;
+Route::Route(byte maxWpPerRoute, byte maxWpNameLength, Logger* logger) {
+
+  this->logger = logger;
   this->maxWpPerRoute = maxWpPerRoute;
   this->maxWpNameLength = maxWpNameLength;
   waypoints = new tRouteWaypoint[maxWpPerRoute];
@@ -38,9 +37,7 @@ void Route::initialize(const unsigned int ID) {
 void Route::addWaypoint(const char* src) {
   
   if (index >= maxWpPerRoute) {
-    if (LOG_WARN) {
-      log_P("WARN : Maximum waypoints per route is reached. Ignoring waypoint: ");logln(src);
-    }
+    warn("Maximum waypoints per route is reached. Ignoring waypoint: %s",src);
   } else {
     /*
      * Assume the route received is equal to the previous route received until proven otherwise based on
@@ -76,32 +73,19 @@ void Route::finalize(const char type, const char* originID) {
 void Route::addCoordinates(const char* src, double latitude, double longitude) {
   
     if (index >= maxWpPerRoute) {
-        if (LOG_WARN) {
-          log_P("WARN : Maximum waypoints per route is reached. Ignoring waypoint: ");logln(src);
-        }      
+      warn("Maximum waypoints per route is reached. Ignoring waypoint: %s",src);
     } else if (equalName(src)) {
       waypoints[index].latitude = latitude;
       waypoints[index].longitude = longitude;
-      if (LOG_TRACE) {
-        log_P("TRACE: WPL: Time="); logln(millis());
-        log_P("TRACE: WPL: Name="); logln(waypoints[index].name);
-        log_P("TRACE: WPL: Latitude="); logln(waypoints[index].latitude);
-        log_P("TRACE: WPL: Longitude="); logln(waypoints[index].longitude);
-      }      
+      trace("WPL: Time=%u, Name=%s, Latitude=%s, Longitude=%s",millis(),waypoints[index].name,toString(waypoints[index].latitude,6,2),toString(waypoints[index].longitude,6,2));
       index++;     
     } else {
       //Invalidate the route. Apparently the RTE messages are not in sync with the WPL messages.
       //Normally WPL messages are send in the same order as the order in the RTE messages.
       //Should be an exceptional case, for example when we cannot keep up. So let's wait for a new RTE message and try again.
       valid = false;
-      if (LOG_WARN) {
-        logln_P("WARN : The received WPL message is not in sync with the previously received RTE messages.");
-      }
-      if (LOG_DEBUG) {
-        log_P("DEBUG: RTE: Name="); logln(waypoints[index].name);
-        log_P("DEBUG: WPL: Name="); logln(src);
-        log_P("DEBUG: RTL: Index="); logln(index);
-      }      
+      warn("The received WPL message is not in sync with the previously received RTE messages.");
+      debug("RTE: Name=%s , WPL: Name=%s , RTL: Index=%u",waypoints[index].name, src,index);
     }
 }
 
@@ -123,12 +107,12 @@ boolean Route::equalName(const  char* src, const byte i) {
 
 void Route::logWaypointNames() {
   
-  log_P("TRACE: RTE equal to previous: ");logln(equalToPrevious);
-  log_P("TRACE: Waypoints in Route list: ");
+  trace("RTE equal to previous: %d",equalToPrevious);
+  log_P("Waypoints in Route list: ");
   for (byte i=0; i < index;i++) {
     log(waypoints[i].name);log_P(",");
   }
-  log("\n");
+  log_P("\n");
 }
 
 void Route::setOriginCurrentLeg(const char* originID) {
@@ -138,9 +122,6 @@ void Route::setOriginCurrentLeg(const char* originID) {
       return i;
     }
   }
-
-  if (LOG_WARN) {
-    logln_P("WARN : The origin of the leg not found in the waypoint list of the route.");    
-  }
+  warn("The origin of the leg not found in the waypoint list of the route.");    
   return 0;
 }

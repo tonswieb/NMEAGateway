@@ -18,25 +18,29 @@ Reads compass heading and forwards it to the N2k bus.
 #define MAX_WP_PER_ROUTE 30
 #define MAX_WP_NAME_LENGTH 6
 
-
+Logger* logger;
 NMEA0183Gateway * pNmea0183Gateway;
 //CompassHeading * pCompassHeading;
 
 void setup() {
 
+  //Initialize the logging system
   Serial.begin(250000);
+  logger = new Logger(&Serial,DEBUG_LEVEL_TRACE);
+  
   Serial3.begin(9600);
-  Serial.print(F("Start initializing NMEA Gateway. Free memory:"));Serial.println(freeMemory());
-  Serial.print(F("Start initializing NMEA200 library. Free memory:"));Serial.println(freeMemory());
+  
+  info("Start initializing NMEA Gateway. Free memory:%u",freeMemory());
+  info("Start initializing NMEA200 library. Free memory:%u",freeMemory());
   setupNMEA2000Lib(&NMEA2000, &Serial);
-  Serial.print(F("Finished initializing NMEA200 library. Free memory:"));Serial.println(freeMemory());
-  Serial.print(F("Start initializing NMEA0183 Gateway library. Free memory:"));Serial.println(freeMemory());
-  pNmea0183Gateway =  new NMEA0183Gateway(&NMEA2000, &Serial3, &Serial,DEBUG_LEVEL_TRACE,MAX_WP_PER_ROUTE,MAX_WP_NAME_LENGTH);
-  Serial.print(F("Finished initializing NMEA0183 Gateway library. Free memory:"));Serial.println(freeMemory());
-  Serial.print(F("Start initializing Compass Heading library. Free memory:"));Serial.println(freeMemory());
+  info("Finished initializing NMEA200 library. Free memory:%u",freeMemory());
+  info("Start initializing NMEA0183 Gateway library. Free memory:%u",freeMemory());
+  pNmea0183Gateway =  new NMEA0183Gateway(&NMEA2000, &Serial3, logger,MAX_WP_PER_ROUTE,MAX_WP_NAME_LENGTH);
+  info("Finished initializing NMEA0183 Gateway library. Free memory:%u",freeMemory());
+  info("Start initializing Compass Heading library. Free memory:%u",freeMemory());
 //  pCompassHeading = new CompassHeading(&NMEA2000,&Serial);
-  Serial.print(F("Finished initializing Compass Heading library. Free memory:"));Serial.println(freeMemory());
-  Serial.print(F("Finished initializing NMEA Gateway. Memor min:"));Serial.println(freeMemory());
+  info("Finished initializing Compass Heading library. Free memory:%u",freeMemory());
+  info("Finished initializing NMEA Gateway. Free memory:%u",freeMemory());
 }
 
 void loop() {

@@ -15,6 +15,7 @@ Author: Ton Swieb
 #define _Log_H_
 
 #include <Arduino.h>
+#include "PrintfWrapper.h"
 
 #define DEBUG_LEVEL_TRACE 4
 #define DEBUG_LEVEL_DEBUG 3
@@ -23,15 +24,41 @@ Author: Ton Swieb
 #define DEBUG_LEVEL_ERROR 0
 
 //Some macros to make the logging systeem a bit less cumbersome
-#define LOG_TRACE debugStream!=0 && debugLevel >= DEBUG_LEVEL_TRACE
-#define LOG_DEBUG debugStream!=0 && debugLevel >= DEBUG_LEVEL_DEBUG
-#define LOG_INFO debugStream!=0 && debugLevel >= DEBUG_LEVEL_INFO
-#define LOG_WARN debugStream!=0 && debugLevel >= DEBUG_LEVEL_WARN
-#define LOG_ERROR debugStream!=0 && debugLevel >= DEBUG_LEVEL_ERROR
-#define log_P(...) debugStream->print(F(__VA_ARGS__))
-#define logln_P(...) debugStream->println(F(__VA_ARGS__))
-#define log(...) debugStream->print(__VA_ARGS__)
-#define logln(...) debugStream->println(__VA_ARGS__)
+#define LOG_TRACE logger!=0 && logger->getLevel() >= DEBUG_LEVEL_TRACE
+#define LOG_DEBUG logger!=0 && logger->getLevel() >= DEBUG_LEVEL_DEBUG
+#define LOG_INFO logger!=0 && logger->getLevel() >= DEBUG_LEVEL_INFO
+#define LOG_WARN logger!=0 && logger->getLevel() >= DEBUG_LEVEL_WARN
+#define LOG_ERROR logger!=0 && logger->getLevel() >= DEBUG_LEVEL_ERROR
+
+#define log(message) if (logger!=0) {logger->getStream()->print(message);}
+#define logln(message) if (logger!=0) {logger->getStream()->println(message);}
+#define log_P(message) if (logger!=0) {logger->getStream()->print(F(message));}
+#define logln_P(message) if (logger!=0) {logger->getStream()->println(F(message));}
+#define error(fmt, ...) if (logger!=0) {logger->logError(F(fmt), ##__VA_ARGS__);}
+#define warn(fmt, ...) if (logger!=0) {logger->logWarn(F(fmt), ##__VA_ARGS__);}
+#define info(fmt, ...) if (logger!=0) {logger->logInfo(F(fmt), ##__VA_ARGS__);}
+#define debug(fmt, ...) if (logger!=0) {logger->logDebug(F(fmt), ##__VA_ARGS__);}
+#define trace(fmt, ...) if (logger!=0) {logger->logTrace(F(fmt), ##__VA_ARGS__);}
+#define toString(__val, __width, __prec) logger !=0 ? logger->doubleToString(__val,__width,__prec) : NULL
+
+class Logger {
+
+  private:
+    byte debugLevel;
+    Stream* logger;
+    PrintfWrapper* printfWrapper;
+
+  public:
+    int getLevel();
+    Stream* getStream();
+    void logError(const __FlashStringHelper *fmt, ...);
+    void logWarn(const __FlashStringHelper *fmt, ...);
+    void logInfo(const __FlashStringHelper *fmt, ...);
+    void logDebug(const __FlashStringHelper *fmt, ...);
+    void logTrace(const __FlashStringHelper *fmt, ...);
+    char* doubleToString(double   __val, signed char   __width, unsigned char   __prec);
+    Logger (Stream* logger, int logLevel = DEBUG_LEVEL_INFO);
+};
 
 #endif
 
