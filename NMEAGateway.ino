@@ -28,7 +28,7 @@ void setup() {
   Serial.begin(250000);
   logger = new Logger(&Serial,DEBUG_LEVEL_TRACE);
   
-  Serial3.begin(9600);
+  Serial3.begin(4800);
   
   info("Start initializing NMEA Gateway. Free memory:%u",freeMemory());
   info("Start initializing NMEA200 library. Free memory:%u",freeMemory());
@@ -61,9 +61,9 @@ void setupNMEA2000Lib(tNMEA2000* pNMEA2000, Stream* forwardStream) {
   pNMEA2000->EnableForward(true);
   pNMEA2000->ExtendTransmitMessages(TransmitMessages);
 
-  
-  pNMEA2000->SetForwardOwnMessages(); //Uncomment this to see the own messages we are sending.
-  pNMEA2000->SetDebugMode(tNMEA2000::dm_ClearText); // Uncomment this, so you can test code without CAN bus chips on Arduino Mega
+
+  //pNMEA2000->SetForwardOwnMessages(); //Uncomment this to see the own messages we are sending.
+  //pNMEA2000->SetDebugMode(tNMEA2000::dm_ClearText); // Uncomment this, so you can test code without CAN bus chips on Arduino Mega
 
   pNMEA2000->Open();
 }
